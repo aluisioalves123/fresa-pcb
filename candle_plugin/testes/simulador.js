@@ -78,9 +78,18 @@ function montarArvore(xml) {
         if (t.indexOf("</") === 0) { pilha.pop(); return; }
         var nome = (/name="([^"]+)"/.exec(t) || [])[1];
         var w = widget();
-        if (/class="CameraWidget"/.test(t)) {   // o que o componente de camera informa
+        if (/class="CameraWidget"/.test(t)) {   // imita o CameraWidget do Candle
             w.availableCameras = JSON.parse(process.env.CAMERAS || '["USB2.0 PC CAMERA"]');
-            w.availableResolutions = ["1280x720", "640x480", "320x240"];
+            var suportadas = JSON.parse(process.env.RESOLUCOES || '["640x480", "320x240"]');
+            var res = [1280, 720], nomeCam = "", aberta = null;
+            // availableResolutions so existe com a camera escolhida; a resolucao so vale
+            // no momento em que a camera e escolhida (initCamera)
+            Object.defineProperty(w, "availableResolutions", { get: function () { return nomeCam ? suportadas : []; } });
+            Object.defineProperty(w, "resolution", { get: function () { return res; },
+                                                     set: function (v) { res = v; } });
+            Object.defineProperty(w, "cameraName", { get: function () { return nomeCam; },
+                set: function (v) { nomeCam = v; aberta = v ? res.join("x") : null; } });
+            Object.defineProperty(w, "abertaCom", { get: function () { return aberta; } });
         }
         if (nome) pilha[pilha.length - 1][nome] = w;
         todos[nome] = w;                    // indice plano so para o simulador mexer
@@ -145,7 +154,7 @@ roteiro.forEach(function (p) {
 });
 
 var cam = todos.camMain;
-var camera = { cameraName: cam.cameraName, resolution: cam.resolution, zoom: cam.zoom, pos: cam.pos,
+var camera = { abertaCom: cam.abertaCom, cameraName: cam.cameraName, resolution: cam.resolution, zoom: cam.zoom, pos: cam.pos,
     aimPos: cam.aimPos, aimSize: cam.aimSize, aimLineWidth: cam.aimLineWidth, aimColor: cam.aimColor,
     mirrorHorizontal: cam.mirrorHorizontal, mirrorVertical: cam.mirrorVertical };
 Object.keys(armazenamento).forEach(function (k) { if (k.indexOf("CameraPlugin/") === 0) delete armazenamento[k]; });

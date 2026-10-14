@@ -205,10 +205,6 @@ function configurarCamera() {
     var nome = String(g.value("name", ""));
     var configurada = nome !== "";
     if (!configurada) nome = escolherCamera(c.availableCameras || []);
-    if (configurada) {
-        var r = String(g.value("resolution", ""));
-        if (r.indexOf("x") > 0) c.resolution = par(r.replace("x", ","), parseInt);
-    }
     c.zoom = parseFloat(g.value("zoom", 1));
     c.pos = par(g.value("position", "0, 0"), parseInt);
     // a mira e relativa a imagem: 0,0 e o canto, 0.5,0.5 e o centro. Nunca configurada, vai ao centro.
@@ -220,12 +216,20 @@ function configurarCamera() {
     c.aimColor = parseInt(g.value("aimColor", -65536));
     c.mirrorHorizontal = String(g.value("mirrorHorizontal", false)) === "true";
     c.mirrorVertical = String(g.value("mirrorVertical", false)) === "true";
+    // O CameraWidget so aplica a resolucao quando a camera e escolhida (e nasce pedindo
+    // 1280x720, que o endoscopio nao tem). Entao: escolhe a camera, ve as resolucoes que ELA
+    // informa, fixa uma suportada e escolhe a camera de novo para ligar com ela.
     c.cameraName = nome;
-    if (!configurada && nome) {
+    if (nome) {
+        var suportadas = [];
         var rs = c.availableResolutions || [];
-        for (var i = 0; i < rs.length; i++) {
-            if (String(rs[i]) === RESOLUCAO_PADRAO) c.resolution = par(RESOLUCAO_PADRAO.replace("x", ","), parseInt);
-        }
+        for (var i = 0; i < rs.length; i++) suportadas.push(String(rs[i]));
+        var quero = configurada ? String(g.value("resolution", RESOLUCAO_PADRAO)) : RESOLUCAO_PADRAO;
+        var usar = suportadas.indexOf(quero) >= 0 ? quero
+                 : suportadas.indexOf(RESOLUCAO_PADRAO) >= 0 ? RESOLUCAO_PADRAO
+                 : suportadas.length ? suportadas[0] : quero;
+        c.resolution = par(usar.replace("x", ","), parseInt);
+        c.cameraName = nome;
     }
     if (!nome) {
         var l = c.availableCameras || [];

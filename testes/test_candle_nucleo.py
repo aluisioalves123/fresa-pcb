@@ -164,7 +164,7 @@ def test_arquivo_sem_cabecalho_nao_deixa_marcar(tmp_path):
 def test_janela_tem_a_camera_com_a_configuracao_do_plugin_camera(arq3_copia, tmp_path):
     s = simular(arq3_copia, [], tmp_path)
     assert s['camera'] == {
-        'cameraName': 'USB2.0 PC CAMERA', 'resolution': [640, 480], 'zoom': 1.5, 'pos': [10, 20],
+        'abertaCom': '640x480', 'cameraName': 'USB2.0 PC CAMERA', 'resolution': [640, 480], 'zoom': 1.5, 'pos': [10, 20],
         'aimPos': [0.5, 0.48], 'aimSize': 30, 'aimLineWidth': 2, 'aimColor': -65536,
         'mirrorHorizontal': False, 'mirrorVertical': True}
 
@@ -176,8 +176,16 @@ def test_camera_nao_escolhida_usa_a_da_especificacao_com_mira_no_centro(arq3_cop
     monkeypatch.setenv('CAMERAS', json.dumps(['Integrated Webcam', 'USB2.0 PC CAMERA']))
     s = simular(arq3_copia, [{'foto': 'f'}], tmp_path)
     c = s['camera']
-    assert c['cameraName'] == 'USB2.0 PC CAMERA' and c['resolution'] == [640, 480] and c['aimPos'] == [0.5, 0.5]
+    assert c['cameraName'] == 'USB2.0 PC CAMERA' and c['aimPos'] == [0.5, 0.5]
+    assert c['abertaCom'] == '640x480'          # a camera LIGOU com a resolucao que ela tem
     assert 'Leve a câmera' in s['fotos'][0]['lblResultado']['text']   # sem aviso de camera
+
+
+def test_resolucao_salva_que_a_camera_nao_tem_e_trocada(arq3_copia, tmp_path, monkeypatch):
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': 'USB2.0 PC CAMERA', 'resolution': '1280x720'}))
+    monkeypatch.setenv('RESOLUCOES', json.dumps(['352x288', '640x480']))
+    s = simular(arq3_copia, [], tmp_path)
+    assert s['camera']['abertaCom'] == '640x480'
 
 
 def test_sem_camera_ligada_avisa(arq3_copia, tmp_path, monkeypatch):
