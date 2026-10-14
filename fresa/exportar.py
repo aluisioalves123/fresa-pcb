@@ -19,6 +19,8 @@ class Resultado:
     caminhos_cima: list
     caminhos_baixo: list
     contorno_cima: list
+    cruz_cima: tuple         # extremos do voo 1: x0, x1, y0, y1
+    cruz_baixo: tuple
     contorno_baixo: list
     furos: list
     invasao_proibidas: dict  # lado -> quanto o corte mais fundo entra numa area proibida (mm)
@@ -44,9 +46,11 @@ def _invasao(proibidas, P):
     return pior
 
 
-def gerar(placa, relatorio, saida, previa=True, sulco_fora=True):
-    """sulco_fora=False reproduz o gerador da v5, que parava o CENTRO da fresa na beira das
-    areas proibidas (o sulco entrava meio sulco nelas). So a prova usa, para comparar."""
+def gerar(placa, relatorio, saida, previa=True, regra_v5=False):
+    """regra_v5=True reproduz o gerador que fresou a v5: parava o CENTRO da fresa na beira das
+    areas proibidas (o sulco entrava meio sulco nelas) e o pre-flight do arquivo 1 nao incluia
+    os furos. So a prova usa, para comparar com os arquivos da v5."""
+    sulco_fora = not regra_v5
     os.makedirs(saida, exist_ok=True)
     fid = relatorio.fiduciais
     fid_baixo = sorted([(-x, y) for x, y in fid])
@@ -78,11 +82,13 @@ def gerar(placa, relatorio, saida, previa=True, sulco_fora=True):
     furos = cam.ordenar_pontos(pts)
 
     nome = placa.nome.upper()
-    g1, H1 = gcode.arquivo_cobre(placa, Pc, 1, fid,
-                                 f'{nome}: fase 1, cobre de CIMA, com voos de teste e pausa no inicio',
-                                 borda_c and borda_c['rede'])
+    # pre-flight do arquivo 1 inclui todos os furos: na placa tem que caber o desenho e os furos
+    furos_voo = [] if regra_v5 else furos
+    g1, H1, cruz1 = gcode.arquivo_cobre(placa, Pc, 1, fid,
+                                        f'{nome}: fase 1, cobre de CIMA, com voos de teste e pausa no inicio',
+                                        borda_c and borda_c['rede'], furos_voo)
     g2 = gcode.arquivo_furos(placa, furos, fid, f'{nome}: fase 2, {len(furos)} furos')
-    g3, H3 = gcode.arquivo_cobre(placa, Pb, 3, fid_baixo,
+    g3, H3, cruz3 = gcode.arquivo_cobre(placa, Pb, 3, fid_baixo,
                                  f'{nome}: fase 3, cobre de BAIXO, placa virada como pagina de livro',
                                  borda_b and borda_b['rede'])
     arquivos = []
@@ -93,7 +99,7 @@ def gerar(placa, relatorio, saida, previa=True, sulco_fora=True):
             fh.write('\n'.join(G) + '\n')
         arquivos.append(c)
 
-    res = Resultado(arquivos, [], Pc, Pb, H1, H3, furos,
+    res = Resultado(arquivos, [], Pc, Pb, H1, cruz1, cruz3, H3, furos,
                     {'cima': _invasao(proibidas, Pc),
                      'baixo': _invasao([affinity.scale(a, -1, 1, origin=(0, 0)) for a in proibidas], Pb)})
     if previa:

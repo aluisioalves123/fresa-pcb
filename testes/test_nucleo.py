@@ -321,9 +321,27 @@ def test_acabamento_tira_os_dentinhos_na_beira_das_areas(tmp_path):
         junto = proib.buffer(2 * c.MEIO_SULCO + 0.05).difference(proib)
         return fechado.difference(sulcos).intersection(junto).area
 
-    antes = exportar.gerar(p, r, str(tmp_path / 'a'), previa=False, sulco_fora=False)
+    antes = exportar.gerar(p, r, str(tmp_path / 'a'), previa=False, regra_v5=True)
     depois = exportar.gerar(p, r, str(tmp_path / 'b'), previa=False)
     assert dentes(antes.caminhos_cima, False) > 0.01
     for P, esp in ((depois.caminhos_cima, False), (depois.caminhos_baixo, True)):
         assert dentes(P, esp) < 0.002
     assert depois.invasao_proibidas == {'cima': 0.0, 'baixo': 0.0}
+
+
+def test_preflight_do_arquivo_1_inclui_os_furos(tmp_path):
+    """No arquivo 1 os voos cobrem o corte E os furos: a cruz para em cima de cada fiducial e o
+    contorno envolve todos os furos. O arquivo 3 (furos ja feitos) nao muda."""
+    from shapely.geometry import Point, Polygon
+    p = placa.carregar(GERBER, PRE)
+    r = validacao.validar(p)
+    res = exportar.gerar(p, r, str(tmp_path), previa=False)
+    t1 = open(res.arquivos[0]).read().split('\n')
+    i = next(k for k, l in enumerate(t1) if l.startswith('( VOO 1'))
+    movs = [l for l in t1[i:] if l.startswith(('G0 X', 'G1 X'))]
+    assert movs[0] == 'G0 X-13.000 Y0.000' and movs[1] == 'G1 X13.000 Y0.000 F600'
+    assert res.cruz_cima[:2] == (-13.0, 13.0)
+    contorno = Polygon(res.contorno_cima)
+    assert all(contorno.buffer(1e-3).contains(Point(f)) for f in res.furos)
+    assert (-13.0, 0.0) in res.contorno_cima and (13.0, 0.0) in res.contorno_cima
+    assert 'furos cabem' not in open(res.arquivos[2]).read()

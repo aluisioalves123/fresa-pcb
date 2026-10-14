@@ -43,6 +43,11 @@ shapely 2.2.0, GEOS 3.14.1
 - OK: 2-furos.nc: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto
 - OK: 3-cobre-baixo.nc: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto
 
+## Pre-flight do arquivo 1 (regra atual)
+
+- OK: a cruz em X vai de -13.000 a 13.000: para em cima dos 2 fiduciais
+- OK: o contorno do voo 2 envolve os 28 furos
+
 ## Areas proibidas
 
 - na regra da v5, o sulco entrava ate 0.194 mm nas areas proibidas (o centro da fresa parava na beira)

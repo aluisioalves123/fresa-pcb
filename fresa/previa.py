@@ -81,7 +81,7 @@ def _lado(placa, res, fid, espelhar, titulo, caminho):
         ax.add_patch(plt.Circle((sx * f.x, f.y), gcode.BROCA / 2, fc=FURO, ec=ANEL_FURO, lw=.9))
     for x, y in fid:
         ax.add_patch(plt.Circle((sx * x, y), .75, fc='none', ec=VERMELHO, lw=1.5))
-    xa, xb, ya, yb = cam.extremos(P)
+    xa, xb, ya, yb = res.cruz_baixo if espelhar else res.cruz_cima
     ax.plot([xa, xb], [0, 0], color=VERDE, lw=1, ls='--')
     ax.plot([0, 0], [ya, yb], color=VERDE, lw=1, ls='--')
     ax.plot([q[0] for q in H + [H[0]]], [q[1] for q in H + [H[0]]], color=AMARELO, lw=1.2, ls=':')

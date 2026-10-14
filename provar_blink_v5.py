@@ -97,7 +97,7 @@ def main():
     p = placa.carregar(gerber, PREFIXO)
     rel = validacao.validar(p)
     # para comparar com a v5: a regra dela parava o centro da fresa na beira das areas proibidas
-    res = exportar.gerar(p, rel, os.path.join(saida, 'regra-v5'), sulco_fora=False)
+    res = exportar.gerar(p, rel, os.path.join(saida, 'regra-v5'), regra_v5=True)
     nc1, nc2, nc3 = res.arquivos
     # o que o nucleo gera hoje: a beira do sulco, e nao o centro, para na area proibida
     novo = exportar.gerar(p, rel, saida)
@@ -189,6 +189,13 @@ def main():
               and 'G53 G0 Z-2' in L and L[-5:-1] == ['G53 G0 Z-2', 'M5', 'G0 X0 Y0', 'M30']
               and not any(re.match(r'^G0 Z(1\d|[5-9]\d*)', l) and l != 'G0 Z5' for l in L))
         item(ok, f'{os.path.basename(c)}: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto')
+    linhas += ['', '## Pre-flight do arquivo 1 (regra atual)', '']
+    item(novo.cruz_cima[0] <= -13.0 and novo.cruz_cima[1] >= 13.0,
+         f'a cruz em X vai de {novo.cruz_cima[0]:.3f} a {novo.cruz_cima[1]:.3f}: para em cima dos 2 fiduciais')
+    from shapely.geometry import Point as _Pt, Polygon as _Pol
+    item(all(_Pol(novo.contorno_cima).buffer(1e-3).contains(_Pt(f)) for f in novo.furos),
+         f'o contorno do voo 2 envolve os {len(novo.furos)} furos')
+
     linhas += ['', '## Areas proibidas', '']
     v = res.invasao_proibidas
     linhas.append(f'- na regra da v5, o sulco entrava ate {max(v.values()):.3f} mm nas areas proibidas '

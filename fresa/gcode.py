@@ -40,25 +40,32 @@ def cabecalho_maquina(fase, lado, ferramenta, placa, fiduciais, extra=''):
     ]
 
 
-def voos(P):
-    """Voo 1 em cruz pelo centro a Z2 e voo 2 no contorno a Z0.5, fresa desligada."""
-    x0, x1, y0, y1 = cam.extremos(P)
+def voos(P, furos=()):
+    """Voo 1 em cruz pelo centro a Z2 e voo 2 no contorno a Z0.5, fresa desligada.
+    Com furos (arquivo 1), os dois voos cobrem o corte E os furos: os fiduciais ficam fora do
+    cobre, perto da beira, e e preciso saber logo no comeco se eles cabem na placa."""
+    pontos = list(P) + [[tuple(f)] for f in furos]
+    x0, x1, y0, y1 = cam.extremos(pontos)
+    o_que = 'o desenho e os furos cabem' if furos else 'o desenho cabe'
     G = [comentario('VOO 1 em cruz pelo centro da placa, fresa DESLIGADA, Z2: '
-                    'para 2 s em cada extremo, confira se o desenho cabe na placa'),
-         comentario(f'extremos do corte: X {x0:.1f} a {x1:.1f} | Y {y0:.1f} a {y1:.1f}')]
+                    f'para 2 s em cada extremo, confira se {o_que} na placa'),
+         comentario(f'extremos do corte{" e dos furos" if furos else ""}: '
+                    f'X {x0:.1f} a {x1:.1f} | Y {y0:.1f} a {y1:.1f}')]
+    if furos:
+        G.append(comentario('os fiduciais ficam na linha do centro: as paradas em X sao em cima deles'))
     for a, b in [((x0, 0), (x1, 0)), ((0, y0), (0, y1))]:
         G += [f'G0 X{f3(a[0])} Y{f3(a[1])}', f'G0 Z{Z_VOO1}', 'G4 P2',
               f'G1 X{f3(b[0])} Y{f3(b[1])} F{F_VOO}', 'G4 P2', f'G0 Z{Z_VOO1_ENTRE}']
-    H = cam.contorno_voo(P)
-    G += [comentario('VOO 2 no contorno de tudo o que vai ser cortado, fresa DESLIGADA, Z0.5: '
-                     'confira se a ponta passa longe das areas proibidas'),
+    H = cam.contorno_voo(pontos)
+    G += [comentario(f'VOO 2 no contorno de tudo o que vai ser cortado{" e furado" if furos else ""}, '
+                     'fresa DESLIGADA, Z0.5: confira se a ponta passa longe das areas proibidas'),
           f'G0 X{f3(H[0][0])} Y{f3(H[0][1])}', f'G0 Z{Z_VOO2}', 'G4 P2']
     G += [f'G1 X{f3(x)} Y{f3(y)} F{F_VOO}' for x, y in H[1:] + [H[0]]]
     G += ['G4 P2', TOPO, 'G0 X0.000 Y0.000',
           comentario('PAUSA: voos conferidos? Aperte Pause de novo no Candle para ligar a fresa '
                      'e cortar, ou Stop para cancelar'),
           'M0']
-    return G, H
+    return G, H, (x0, x1, y0, y1)
 
 
 def cortes(P):
@@ -70,7 +77,7 @@ def cortes(P):
     return G
 
 
-def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None):
+def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None, furos=()):
     lado = 'cima' if fase == 1 else 'baixo'
     extra = '' if fase == 1 else ' espelhado=x corrigir=sim'
     G = cabecalho_maquina(fase, lado, 'vbit30', placa, fiduciais_arquivo, extra)
@@ -86,9 +93,9 @@ def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None):
         G.append(comentario(f'borda: o plano {rede_borda} vai ate a beira e nao e isolado dela, '
                             f'todas as outras redes tem isolacao completa'))
     G += INICIO
-    gv, H = voos(P)
+    gv, H, cruz = voos(P, furos)
     G += gv + SPIN + cortes(P) + FIM
-    return G, H
+    return G, H, cruz
 
 
 def arquivo_furos(placa, furos, fiduciais_arquivo, titulo):
