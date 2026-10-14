@@ -48,6 +48,7 @@ var app = {
         };
     } },
     settingsLoaded: sinal(), settingsSaved: sinal(), settingsRejected: sinal(), settingsSetByDefault: sinal(),
+    settingsAccepted: sinal(),
     loadFile: function (x) {
         if (typeof x === "string") {
             log.carregados.push(x);
@@ -94,6 +95,7 @@ var ctx = {
     QFileInfo: function (n) { this.fileName = function () { return path.basename(n); }; },
     QUiLoader: function () {
         this.setWorkingDirectory = function () {};
+        this.addPluginPath = function () {};
         this.load = function (f) { return montarArvore(fs.readFileSync(f.p, "utf8")); };
     },
     QTimer: function () { var t = this; t.timeout = sinal(); t.start = function () { timers.push(t); }; },
@@ -103,8 +105,18 @@ var ctx = {
 ctx.eval = function (codigo) { return vm.runInContext(codigo, ctx); };
 vm.createContext(ctx);
 vm.runInContext(fs.readFileSync(path.join(PLUGIN, "script.js"), "utf8"), ctx, { filename: "script.js" });
+// configuracao do plugin Camera oficial, como ela fica guardada no Candle
+var camConfig = JSON.parse(process.env.CAMERA_CONFIG || "null") || {
+    name: "USB2.0 PC CAMERA", resolution: "640x480", zoom: "1.5", position: "10, 20",
+    aimPosition: "0.5, 0.48", aimSize: "30", aimLineWidth: "2", aimColor: "-65536",
+    mirrorHorizontal: "false", mirrorVertical: "true"
+};
+Object.keys(camConfig).forEach(function (k) { armazenamento["CameraPlugin/" + k] = camConfig[k]; });
+
 ctx.init();
-ctx.createPanelWidget();
+if (ctx.createPanelWidget()) throw "o plugin nao deve mais criar painel";
+var janela = ctx.createWindowWidget();
+if (!janela) throw "createWindowWidget nao devolveu a janela";
 ctx.createSettingsWidget();
 app.settingsLoaded.emitir();
 
@@ -128,5 +140,10 @@ roteiro.forEach(function (p) {
     }
 });
 
+var cam = todos.camMain;
+var camera = { cameraName: cam.cameraName, resolution: cam.resolution, zoom: cam.zoom, pos: cam.pos,
+    aimPos: cam.aimPos, aimSize: cam.aimSize, aimLineWidth: cam.aimLineWidth, aimColor: cam.aimColor,
+    mirrorHorizontal: cam.mirrorHorizontal, mirrorVertical: cam.mirrorVertical };
+Object.keys(armazenamento).forEach(function (k) { if (k.indexOf("CameraPlugin/") === 0) delete armazenamento[k]; });
 process.stdout.write(JSON.stringify({ log: log, fotos: fotos, armazenamento: armazenamento,
-    programa: app.program.fileName }));
+    programa: app.program.fileName, camera: camera }));

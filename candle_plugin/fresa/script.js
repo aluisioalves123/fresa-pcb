@@ -1,6 +1,8 @@
-// Fresa PCB: plugin do Candle. Faz uma coisa so: com o desenho aberto, voce marca os dois
-// fiduciais pela camera e ele corrige o desenho (giro + deslocamento). Nao move a maquina.
-// O deslocamento camera -> broca fica nas Configuracoes do Candle.
+// Fresa PCB: plugin do Candle. Faz uma coisa so: com o desenho aberto, voce olha a camera,
+// centraliza cada fiducial na mira, marca os dois e ele corrige o desenho (giro + deslocamento).
+// Nao move a maquina. A camera e a mira sao as mesmas configuradas no plugin Camera oficial;
+// o deslocamento camera -> broca fica nas Configuracoes do Candle, secao Fresa PCB.
+// O Windows so deixa um programa usar a camera por vez: feche a janela Camera oficial.
 
 script.importExtension("qt.core");
 script.importExtension("qt.gui");
@@ -9,6 +11,7 @@ script.importExtension("qt.uitools");
 
 var pluginPath = script.path;
 var pluginName = script.name;
+var designerPluginsPath = app.path + "/designerplugins";   // de onde vem o CameraWidget
 var loader = new QUiLoader();
 var ui, uiSettings;
 
@@ -174,6 +177,32 @@ function onCorrigir() {
         + n3(t.centro[0]) + " Y " + n3(t.centro[1]) + ".");
 }
 
+// ---------- camera: mesma camera e mesma mira do plugin Camera oficial ----------
+
+function par(texto, conv) {
+    var l = String(texto).split(",");
+    return [conv(l[0]), conv(l[1])];
+}
+
+function configurarCamera() {
+    var g = app.storage.group("CameraPlugin");
+    var c = ui.camMain;
+    var r = String(g.value("resolution", ""));
+    if (r.indexOf("x") > 0) c.resolution = par(r.replace("x", ","), parseInt);
+    c.zoom = parseFloat(g.value("zoom", 1));
+    c.pos = par(g.value("position", "0, 0"), parseInt);
+    c.aimPos = par(g.value("aimPosition", "0, 0"), parseFloat);
+    c.aimSize = parseInt(g.value("aimSize", 20));
+    c.aimLineWidth = parseInt(g.value("aimLineWidth", 1));
+    c.aimColor = parseInt(g.value("aimColor", -65536));
+    c.mirrorHorizontal = String(g.value("mirrorHorizontal", false)) === "true";
+    c.mirrorVertical = String(g.value("mirrorVertical", false)) === "true";
+    c.cameraName = String(g.value("name", ""));
+    if (!c.cameraName) {
+        ui.lblResultado.text = cor(AMARELO, "Escolha a câmera nas Configurações do Candle, seção Camera.");
+    }
+}
+
 // ---------- configuracoes (deslocamento da camera) ----------
 
 function lerConfiguracoes() {
@@ -195,7 +224,10 @@ function gravarConfiguracoes() {
 
 function init() {
     loader.setWorkingDirectory(new QDir(pluginPath));
+    loader.addPluginPath(designerPluginsPath);
     app.settingsLoaded.connect(lerConfiguracoes);
+    app.settingsLoaded.connect(function () { if (ui) configurarCamera(); });
+    app.settingsAccepted.connect(function () { if (ui) configurarCamera(); });
     app.settingsSaved.connect(gravarConfiguracoes);
     app.settingsRejected.connect(lerConfiguracoes);
     app.settingsSetByDefault.connect(function () {
@@ -205,8 +237,12 @@ function init() {
 }
 
 function createPanelWidget() {
+}
+
+// janela propria (como a Camera oficial): a camera em cima, os botoes embaixo
+function createWindowWidget() {
     var raiz = carregarUi("widget.ui");
-    ui = pegar(raiz, ["lblArquivo", "cmdMarcar1", "cmdMarcar2", "lblResultado", "cmdCorrigir"]);
+    ui = pegar(raiz, ["camMain", "lblArquivo", "cmdMarcar1", "cmdMarcar2", "lblResultado", "cmdCorrigir"]);
     ui.cmdMarcar1.clicked.connect(onMarcar(0));
     ui.cmdMarcar2.clicked.connect(onMarcar(1));
     ui.cmdCorrigir.clicked.connect(onCorrigir);
@@ -215,10 +251,8 @@ function createPanelWidget() {
     timer.timeout.connect(vigiar);
     timer.start();
     vigiar();
+    configurarCamera();
     return raiz;
-}
-
-function createWindowWidget() {
 }
 
 function createSettingsWidget() {

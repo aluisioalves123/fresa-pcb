@@ -159,3 +159,17 @@ def test_arquivo_sem_cabecalho_nao_deixa_marcar(tmp_path):
     s = simular(str(a), [{'foto': 'f'}], tmp_path)
     f = s['fotos'][0]
     assert 'Sem cabeçalho FRESA' in f['lblArquivo']['text'] and not f['cmdMarcar1']['enabled']
+
+
+def test_janela_tem_a_camera_com_a_configuracao_do_plugin_camera(arq3_copia, tmp_path):
+    s = simular(arq3_copia, [], tmp_path)
+    assert s['camera'] == {
+        'cameraName': 'USB2.0 PC CAMERA', 'resolution': [640, 480], 'zoom': 1.5, 'pos': [10, 20],
+        'aimPos': [0.5, 0.48], 'aimSize': 30, 'aimLineWidth': 2, 'aimColor': -65536,
+        'mirrorHorizontal': False, 'mirrorVertical': True}
+
+
+def test_sem_camera_escolhida_avisa(arq3_copia, tmp_path, monkeypatch):
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
+    s = simular(arq3_copia, [{'foto': 'f'}], tmp_path)
+    assert 'Escolha a câmera' in s['fotos'][0]['lblResultado']['text']

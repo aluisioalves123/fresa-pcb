@@ -3,13 +3,26 @@
  <class>frmFresa</class>
  <widget class="QWidget" name="frmFresa">
   <property name="geometry">
-   <rect><x>0</x><y>0</y><width>280</width><height>220</height></rect>
+   <rect><x>0</x><y>0</y><width>400</width><height>420</height></rect>
   </property>
   <layout class="QVBoxLayout" name="layMain">
    <property name="leftMargin"><number>0</number></property>
    <property name="topMargin"><number>0</number></property>
    <property name="rightMargin"><number>0</number></property>
    <property name="bottomMargin"><number>0</number></property>
+   <item>
+    <widget class="CameraWidget" name="camMain" native="true">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+       <horstretch>0</horstretch>
+       <verstretch>1</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size><width>200</width><height>150</height></size>
+     </property>
+    </widget>
+   </item>
    <item>
     <widget class="QLabel" name="lblArquivo">
      <property name="wordWrap"><bool>true</bool></property>
@@ -21,13 +34,13 @@
      <item>
       <widget class="QPushButton" name="cmdMarcar1">
        <property name="text"><string>Marcar fiducial 1</string></property>
-       <property name="toolTip"><string>Com o fiducial da esquerda no centro da mira da câmera</string></property>
+       <property name="toolTip"><string>Com o fiducial da esquerda no centro da mira</string></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="cmdMarcar2">
        <property name="text"><string>Marcar fiducial 2</string></property>
-       <property name="toolTip"><string>Com o fiducial da direita no centro da mira da câmera</string></property>
+       <property name="toolTip"><string>Com o fiducial da direita no centro da mira</string></property>
       </widget>
      </item>
     </layout>
@@ -45,6 +58,14 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>CameraWidget</class>
+   <extends>QWidget</extends>
+   <header>camerawidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

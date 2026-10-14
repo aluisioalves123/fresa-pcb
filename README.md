@@ -40,7 +40,7 @@ O botão **Exportar para a fresa**:
 
 ## Plugin do Candle
 
-Faz uma coisa só: com o desenho aberto no Candle, você marca os dois fiduciais pela câmera e ele corrige o desenho. Não move a máquina. É o painel **Fresa PCB** na janela Usuário (`candle_plugin/fresa/`).
+Faz uma coisa só: com o desenho aberto no Candle, você olha a câmera, centraliza cada fiducial na mira, marca os dois e ele corrige o desenho. Não move a máquina. É a janela **Fresa PCB** (`candle_plugin/fresa/`): a câmera em cima, os botões embaixo. A câmera e a mira são as mesmas configuradas no plugin Camera oficial (Configurações do Candle, seção Camera). O Windows só deixa um programa usar a câmera por vez: feche a janela Camera oficial enquanto usa a do Fresa PCB.
 
 Instalar ou atualizar (o Windows pede permissão de administrador, porque a pasta de plugins fica em Arquivos de Programas):
 
@@ -53,7 +53,7 @@ Depois feche e abra o Candle.
 Uso, na fase 3:
 
 1. abra o `3-cobre-baixo.nc` (o painel lê os fiduciais do cabeçalho e avisa que precisa de correção);
-2. com o jog, leve a câmera até o fiducial da esquerda, centralize na mira (janela **Camera** oficial) e clique **Marcar fiducial 1**; repita no da direita com **Marcar fiducial 2**;
+2. com o jog, leve a câmera até o fiducial da esquerda, centralize o furo na mira da janela Fresa PCB e clique **Marcar fiducial 1**; repita no da direita com **Marcar fiducial 2**;
 3. o painel mostra a distância de projeto e a medida, o giro e o deslocamento; se a distância errar mais de 0,1 mm, pede para marcar de novo;
 4. **Corrigir o desenho** grava `3-cobre-baixo-CORRIGIDO.nc` ao lado do original e abre ele no lugar (sem a trava do começo, com os voos girados e passando pelo centro real).
 
