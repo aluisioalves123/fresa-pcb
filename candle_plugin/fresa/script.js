@@ -189,6 +189,16 @@ function par(texto, conv) {
 var CAMERA_PADRAO = "USB2.0 PC CAMERA";   // endoscopio da especificacao
 var RESOLUCAO_PADRAO = "640x480";
 var avisoCamera = "";
+var miraTravada = [0.5, 0.5];
+
+// Shift + arrastar no CameraWidget move a mira. A calibracao (deslocamento camera -> broca)
+// vale para a mira no lugar configurado: mira fora do lugar = correcao errada sem aviso.
+// Arrastar sem Shift so desloca a imagem e a rodinha da zoom; a mira vai junto, sem problema.
+function travarMira(v) {
+    if (Math.abs(v[0] - miraTravada[0]) > 1e-6 || Math.abs(v[1] - miraTravada[1]) > 1e-6) {
+        ui.camMain.aimPos = miraTravada;
+    }
+}
 
 // Camera que vale: a escolhida no plugin Camera oficial; se nenhuma foi escolhida, a da
 // especificacao ou a unica ligada.
@@ -210,6 +220,7 @@ function configurarCamera() {
     // a mira e relativa a imagem: 0,0 e o canto, 0.5,0.5 e o centro. Nunca configurada, vai ao centro.
     var mira = par(g.value("aimPosition", "0, 0"), parseFloat);
     if (!mira[0] && !mira[1]) mira = [0.5, 0.5];
+    miraTravada = mira;
     c.aimPos = mira;
     c.aimSize = parseInt(g.value("aimSize", 20));
     c.aimLineWidth = parseInt(g.value("aimLineWidth", 1));
@@ -282,6 +293,7 @@ function createPanelWidget() {
 function createWindowWidget() {
     var raiz = carregarUi("widget.ui");
     ui = pegar(raiz, ["camMain", "lblArquivo", "cmdMarcar1", "cmdMarcar2", "lblResultado", "cmdCorrigir"]);
+    ui.camMain.aimPosChanged.connect(travarMira);
     ui.cmdMarcar1.clicked.connect(onMarcar(0));
     ui.cmdMarcar2.clicked.connect(onMarcar(1));
     ui.cmdCorrigir.clicked.connect(onCorrigir);

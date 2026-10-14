@@ -260,3 +260,10 @@ def test_arquivo_que_nao_e_fresa_nao_e_vigiado(tmp_path):
     q.write_text('G21 G90\nG0 X1 Y1\nM30\n')
     s = trava([{'abrir': str(q)}, {'tick': 1}, {'remetente': 0}], tmp_path)
     assert s == {'tempoReal': [], 'perguntas': 0}
+
+
+def test_mira_nao_sai_do_lugar(arq3_copia, tmp_path, monkeypatch):
+    # Shift + arrastar move a mira no CameraWidget; a calibracao vale para ela no centro
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
+    s = simular(arq3_copia, [{'arrastarMira': [0.62, 0.41]}], tmp_path)
+    assert s['camera']['aimPos'] == [0.5, 0.5]

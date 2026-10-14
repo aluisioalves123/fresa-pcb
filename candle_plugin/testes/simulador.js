@@ -26,7 +26,8 @@ var timers = [];
 
 function sinal() {
     var fns = [];
-    return { connect: function (f) { fns.push(f); }, emitir: function () { for (var i = 0; i < fns.length; i++) fns[i](); } };
+    return { connect: function (f) { fns.push(f); },
+             emitir: function () { var a = arguments; for (var i = 0; i < fns.length; i++) fns[i].apply(null, a); } };
 }
 function widget() { return { text: "", enabled: true, clicked: sinal() }; }
 
@@ -90,6 +91,11 @@ function montarArvore(xml) {
             Object.defineProperty(w, "cameraName", { get: function () { return nomeCam; },
                 set: function (v) { nomeCam = v; aberta = v ? res.join("x") : null; } });
             Object.defineProperty(w, "abertaCom", { get: function () { return aberta; } });
+            // como o setAimPos do CameraWidget: muda e emite aimPosChanged
+            var mira = [0, 0];
+            w.aimPosChanged = sinal();
+            Object.defineProperty(w, "aimPos", { get: function () { return mira; },
+                set: function (v) { mira = [v[0], v[1]]; w.aimPosChanged.emitir(mira); } });
         }
         if (nome) pilha[pilha.length - 1][nome] = w;
         todos[nome] = w;                    // indice plano so para o simulador mexer
@@ -145,6 +151,7 @@ roteiro.forEach(function (p) {
     }
     if (p.abrir) app.program = { lines: linhasDoArquivo(p.abrir), fileName: p.abrir };
     if (p.tick) timers.forEach(function (t) { t.timeout.emitir(); });
+    if (p.arrastarMira) todos.camMain.aimPos = p.arrastarMira;   // Shift + arrastar na imagem
     if (p.clicar) todos[p.clicar].clicked.emitir();
     if (p.foto) {
         var f = { nome: p.foto };
