@@ -28,6 +28,7 @@ class Elemento:
     funcao: str | None     # %TA.AperFunction: ComponentPad, ViaPad, Conductor...
     pos: tuple | None      # centro do flash (pads e vias), None para trilhas
     ref: str | None        # %TO.P  componente, ex "R1"
+    regiao: bool = False   # veio de G36/G37: zona preenchida (plano), nao trilha nem pad
 
 
 def _blocos(texto):
@@ -171,7 +172,7 @@ def ler(caminho):
                 regioes_contornos.append(contorno)
             pols = [Polygon(c).buffer(0) for c in regioes_contornos]
             if pols:
-                out.append(Elemento(rede, unary_union(pols), func_regiao, None, ref))
+                out.append(Elemento(rede, unary_union(pols), func_regiao, None, ref, regiao=True))
             regiao = False
             continue
         if s == 'G75':

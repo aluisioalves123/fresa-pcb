@@ -6,9 +6,13 @@ import math
 
 from shapely import affinity
 from shapely.geometry import LineString, MultiPolygon
-from shapely.ops import unary_union
+from shapely.ops import linemerge, unary_union
 
 TOOL = 0.35              # largura efetiva da fresa em V no gerador
+DEPTH = 0.2              # profundidade do corte
+# largura real do sulco da fresa em V 30 graus, ponta 0,3: ~0,41 mm a 0,2 de profundidade
+LARGURA_SULCO = 0.3 + 2 * DEPTH * math.tan(math.radians(15))
+MEIO_SULCO = LARGURA_SULCO / 2
 R = TOOL / 2
 STEP = TOOL * 0.85       # 0.2975
 PASSES = 4
@@ -16,6 +20,12 @@ SEG_ISO = 32
 SIMPLIFICA = 0.005
 TRECHO_MIN = 0.05        # pedacos recortados menores que isso sao descartados
 TOL_CONTORNO = 0.3       # voo 2: tira vertices que mudam o contorno menos que isso
+BANDA_BORDA = 3.0        # faixa junto da beira onde se procura o plano que vai ate a borda
+AREA_MIN_BORDA = 5.0     # mm2 de plano nessa faixa para ele ser o "dono da borda"
+# Caminho do lado do plano so fica se outra rede estiver a menos disso (alem da distancia
+# da passada). Tirar esse corte nunca cria curto: a outra rede mantem o anel dela inteiro.
+# Ele so garante isolacao dupla na folga plano/rede (ate ~0,85 mm na 1a passada).
+SEPARA = 0.5
 
 
 def cobre(elementos, espelhar=False):
@@ -23,6 +33,58 @@ def cobre(elementos, espelhar=False):
     if espelhar:
         cu = affinity.scale(cu, -1, 1, origin=(0, 0))
     return cu
+
+
+def dono_da_borda(elementos, contorno, espelhar=False, proibidas=None):
+    """Plano (zona preenchida) que chega perto da beira da placa, ou None.
+
+    A isolacao entre esse plano e a beira nao separa nada: a faixa de cobre que sobra
+    na beira passa a ser dele. Por isso so a rede dona pode perder esses cortes; todas
+    as outras continuam com a isolacao completa, e nenhuma outra rede encosta na faixa.
+    Dentro das areas proibidas (lista de poligonos) o lado do plano nunca e cortado.
+    Devolve dict(rede, dono, outros, proibidas) com a geometria ja espelhada se pedido.
+    """
+    banda = contorno.difference(contorno.buffer(-BANDA_BORDA, 32))
+    por_rede = {}
+    for e in elementos:
+        if e.regiao and e.rede:
+            por_rede[e.rede] = por_rede.get(e.rede, 0.0) + e.geom.intersection(banda).area
+    if not por_rede:
+        return None
+    rede = max(por_rede, key=por_rede.get)
+    if por_rede[rede] < AREA_MIN_BORDA:
+        return None
+    dono = unary_union([e.geom for e in elementos if e.rede == rede])
+    outros = unary_union([e.geom for e in elementos if e.rede != rede])
+    # a beira do sulco, nao o centro, e que nao pode entrar: meio sulco de folga
+    proibido = unary_union(proibidas).buffer(MEIO_SULCO, SEG_ISO) if proibidas else None
+    if espelhar:
+        dono = affinity.scale(dono, -1, 1, origin=(0, 0))
+        outros = affinity.scale(outros, -1, 1, origin=(0, 0))
+        proibido = proibido and affinity.scale(proibido, -1, 1, origin=(0, 0))
+    return dict(rede=rede, dono=dono, outros=outros, proibidas=proibido)
+
+
+def descarte(borda, d):
+    """Regiao onde um caminho a distancia d do cobre e inutil: do lado do plano dono
+    da borda e a mais de SEPARA de qualquer cobre de outra rede."""
+    if not borda:
+        return None
+    lado_dono = borda['dono'].buffer(d + 0.01, SEG_ISO)
+    fora = lado_dono.difference(borda['outros'].buffer(d + SEPARA, SEG_ISO))
+    if borda.get('proibidas') is not None:
+        # na area proibida so fica a isolacao obrigatoria, a das outras redes
+        fora = fora.union(lado_dono.difference(borda['outros'].buffer(d + 0.01, SEG_ISO))
+                          .intersection(borda['proibidas']))
+    return fora
+
+
+def _pedacos(g):
+    out = []
+    for sg in (g.geoms if hasattr(g, 'geoms') else [g]):
+        if isinstance(sg, LineString) and sg.length > TRECHO_MIN:
+            out.append(list(sg.coords))
+    return out
 
 
 def _aneis(g):
@@ -35,20 +97,49 @@ def _aneis(g):
     return out
 
 
-def isolacao(cu, area_livre):
-    """Lista de caminhos (lista de pontos). 1a passada inteira, as outras so na area livre."""
+def isolacao(cu, area_livre, borda=None):
+    """Lista de caminhos (lista de pontos). 1a passada inteira, as outras so na area livre.
+    Com um plano dono da borda, tira de todas as passadas o que fica entre ele e a beira."""
     P = []
     for k in range(PASSES):
-        aneis = _aneis(cu.buffer(R + k * STEP, SEG_ISO).simplify(SIMPLIFICA))
-        if k == 0:
-            P += aneis
-            continue
+        d = R + k * STEP
+        aneis = _aneis(cu.buffer(d, SEG_ISO).simplify(SIMPLIFICA))
+        fora = descarte(borda, d)
         for anel in aneis:
-            g = LineString(anel).intersection(area_livre)
-            for sg in (g.geoms if hasattr(g, 'geoms') else [g]):
-                if isinstance(sg, LineString) and sg.length > TRECHO_MIN:
-                    P.append(list(sg.coords))
+            if k == 0 and fora is None:
+                P.append(anel)
+                continue
+            g = LineString(anel)
+            if k > 0:
+                g = g.intersection(area_livre)
+            if fora is not None:
+                g = g.difference(fora)
+                if g.geom_type == 'MultiLineString':
+                    g = linemerge(g)                  # junta o pedaco cortado no inicio do anel
+            P += _pedacos(g)
     return P
+
+
+def acabamento(cu, livre, borda=None):
+    """Passada que corre ao longo da beira das areas proibidas (a linha onde as passadas 2 a 4
+    sao recortadas), so na faixa que essas passadas cobrem. Sem ela, cada passada termina numa
+    ponta redonda e sobra um dentinho de cobre entre duas pontas vizinhas.
+
+    livre ja vem encolhida meio sulco, entao o sulco desta passada encosta na area sem entrar.
+    A faixa comeca a R do cobre (igual a 1a passada) e vai ate a ultima passada: nunca corta
+    cobre do projeto. Onde o lado do plano dono da borda e descartado, aqui tambem.
+    """
+    faixa = cu.buffer(R + (PASSES - 1) * STEP + 0.01, SEG_ISO).difference(cu.buffer(R - 0.01, SEG_ISO))
+    linha = livre.boundary.intersection(faixa)
+    if borda:
+        fora = descarte(borda, R + (PASSES - 1) * STEP)
+        if fora is not None:
+            linha = linha.difference(fora)
+    if linha.is_empty:
+        return []
+    if linha.geom_type == 'MultiLineString':
+        linha = linemerge(linha)
+    return _pedacos(linha)
 
 
 def ordenar(P, inicio=(0, 0)):

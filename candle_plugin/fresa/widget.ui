@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>frmFresa</class>
+ <widget class="QWidget" name="frmFresa">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>300</width><height>460</height></rect>
+  </property>
+  <layout class="QVBoxLayout" name="layMain">
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+   <item>
+    <widget class="QGroupBox" name="grpCamera">
+     <property name="title"><string>Câmera</string></property>
+     <layout class="QVBoxLayout" name="layCamera">
+      <item>
+       <widget class="QLabel" name="lblCamera">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string>Câmera</string></property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layCameraBotoes">
+        <item>
+         <widget class="QPushButton" name="cmdOlharCruz">
+          <property name="text"><string>Olhar a cruz 0,0</string></property>
+          <property name="toolTip"><string>Sobe ao topo e leva a câmera até a cruz gravada na mesa</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="cmdCalibrar">
+          <property name="text"><string>Calibrar aqui</string></property>
+          <property name="toolTip"><string>Use com a cruz 0,0 da mesa no centro da mira</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grpVirada">
+     <property name="title"><string>Corrigir pelos fiduciais</string></property>
+     <layout class="QVBoxLayout" name="layVirada">
+      <item>
+       <widget class="QLabel" name="lblArquivo">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string>Nenhum programa carregado</string></property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QGridLayout" name="layFiduciais">
+        <item row="0" column="0">
+         <widget class="QLabel" name="lblF1">
+          <property name="text"><string>Fiducial 1</string></property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="txtF1">
+          <property name="toolTip"><string>Posição do ponto no arquivo: X, Y</string></property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QPushButton" name="cmdIr1">
+          <property name="text"><string>Ir</string></property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QPushButton" name="cmdMarcar1">
+          <property name="text"><string>Marcar</string></property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="lblF2">
+          <property name="text"><string>Fiducial 2</string></property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="txtF2">
+          <property name="toolTip"><string>Posição do ponto no arquivo: X, Y</string></property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QPushButton" name="cmdIr2">
+          <property name="text"><string>Ir</string></property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QPushButton" name="cmdMarcar2">
+          <property name="text"><string>Marcar</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblResultado">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string/></property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layAcoes">
+        <item>
+         <widget class="QPushButton" name="cmdAplicar">
+          <property name="text"><string>Aplicar correção</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="cmdCentro">
+          <property name="text"><string>Broca no centro</string></property>
+          <property name="toolTip"><string>Leva a broca ao centro real da placa, para o probe do Z</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblDica">
+        <property name="wordWrap"><bool>true</bool></property>
+        <property name="text"><string/></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

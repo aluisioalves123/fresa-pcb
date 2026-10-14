@@ -96,8 +96,11 @@ def main():
     saida = os.path.join(AQUI, 'prova', 'gcode')
     p = placa.carregar(gerber, PREFIXO)
     rel = validacao.validar(p)
-    res = exportar.gerar(p, rel, saida)
+    # para comparar com a v5: a regra dela parava o centro da fresa na beira das areas proibidas
+    res = exportar.gerar(p, rel, os.path.join(saida, 'regra-v5'), sulco_fora=False)
     nc1, nc2, nc3 = res.arquivos
+    # o que o nucleo gera hoje: a beira do sulco, e nao o centro, para na area proibida
+    novo = exportar.gerar(p, rel, saida)
     linhas, ok_geral = [], True
 
     def item(ok, texto):
@@ -186,11 +189,32 @@ def main():
               and 'G53 G0 Z-2' in L and L[-5:-1] == ['G53 G0 Z-2', 'M5', 'G0 X0 Y0', 'M30']
               and not any(re.match(r'^G0 Z(1\d|[5-9]\d*)', l) and l != 'G0 Z5' for l in L))
         item(ok, f'{os.path.basename(c)}: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto')
-    item(res.invasao_garras['cima'] < 1e-3 and res.invasao_garras['baixo'] < 1e-3,
-         'nenhum ponto de corte dentro dos triangulos das garras')
+    linhas += ['', '## Areas proibidas', '']
+    v = res.invasao_proibidas
+    linhas.append(f'- na regra da v5, o sulco entrava ate {max(v.values()):.3f} mm nas areas proibidas '
+                  f'(o centro da fresa parava na beira)')
+    # a 1a passada isola o cobre e nao pode ser recortada: se encostar, a validacao avisa
+    from fresa import caminhos as cm
+    from shapely.geometry import Point as _P
+    um = {'cima': cm.cobre(p.F).buffer(cm.R, cm.SEG_ISO).simplify(cm.SIMPLIFICA).boundary,
+          'baixo': cm.cobre(p.B, True).buffer(cm.R, cm.SEG_ISO).simplify(cm.SIMPLIFICA).boundary}
+    from shapely import affinity as _af
+    for lado, P in (('cima', novo.caminhos_cima), ('baixo', novo.caminhos_baixo)):
+        areas = p.areas_proibidas() if lado == 'cima' else             [_af.scale(a, -1, 1, origin=(0, 0)) for a in p.areas_proibidas()]
+        outras = [q for q in P if max(um[lado].distance(_P(v)) for v in q) > 0.02]
+        primeira = [q for q in P if q not in outras]
+        inv_outras = exportar._invasao(areas, outras)
+        inv_1a = exportar._invasao(areas, primeira)
+        item(inv_outras < 1e-3, f'{lado}: nenhuma passada recortavel entra nas areas proibidas ({inv_outras:.3f} mm)')
+        avisou = any(f'primeira passada no cobre de {lado}' in m for m in rel.avisos)
+        item(inv_1a < 1e-3 or avisou, f'{lado}: a 1a passada, que isola o cobre, entra {inv_1a:.3f} mm'
+             + (' e a validacao avisa' if avisou else ''))
+    perdidos = len(c1) - len(ler_cortes(novo.arquivos[0]))
+    linhas.append(f'- os caminhos de corte do arquivo 1 so mudam onde as passadas 2 a 4 encostavam nas areas: '
+                  f'{len(ler_cortes(novo.arquivos[0]))} caminhos contra {len(c1)}')
 
     linhas += ['', '## Resultado', '', '**TUDO OK**' if ok_geral else '**HOUVE FALHAS**', '',
-               'Arquivos gerados em `prova/gcode/`.']
+               'Arquivos gerados em `prova/gcode/` (regra atual) e `prova/gcode/regra-v5/` (regra da v5, usada na comparacao).']
     os.makedirs(os.path.join(AQUI, 'prova'), exist_ok=True)
     open(os.path.join(AQUI, 'prova', 'RELATORIO.md'), 'w', encoding='utf-8').write('\n'.join(linhas) + '\n')
     print('\n'.join(linhas))

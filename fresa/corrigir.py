@@ -6,6 +6,8 @@ referencia, usada nos testes e como plano B pela linha de comando.
 import math
 import re
 
+from .gcode import f3
+
 CAM_DX, CAM_DY = 35.065, -6.000   # broca em (X, Y) => camera ve (X-35.065, Y+6)
 TOL_DISTANCIA = 0.1
 
@@ -68,7 +70,7 @@ def aplicar(texto, f, titulo):
         m = _COORD.match(l)
         if m:
             x, y = f(float(m.group(2)), float(m.group(3)))
-            l = f'{m.group(1)} X{x:.3f} Y{y:.3f}{m.group(4)}'
+            l = f'{m.group(1)} X{f3(x)} Y{f3(y)}{m.group(4)}'
         out.append(l)
     out.insert(2, f'( {titulo} )')
     return '\n'.join(out)

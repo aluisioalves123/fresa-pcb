@@ -11,7 +11,10 @@ shapely 2.2.0, GEOS 3.14.1
   - info: menor vao entre redes no cobre de cima: 0.503 mm
   - info: menor vao entre redes no cobre de baixo: 0.401 mm
   - info: fiduciais em X-13.000 Y0.000 e X13.000 Y0.000, distancia 26.000 mm
+  - info: areas proibidas: os 4 cantos e 2 de 2x2 mm em volta dos fiduciais
   - aviso: 2 furo(s) com diametro diferente de 0.8, serao feitos com a broca 0.8: 1.00 em X2.50 Y-4.25, 1.00 em X2.50 Y-6.79
+  - aviso: o sulco da primeira passada no cobre de cima entra 0.12 mm numa area proibida perto de X-10.40 Y-8.69: e ela que isola o cobre ali, entao nao da para tirar; afaste o cobre uns 0.2 mm se a fresa nao puder passar
+  - aviso: o sulco da primeira passada no cobre de baixo entra 0.12 mm numa area proibida perto de X-10.40 Y-8.69: e ela que isola o cobre ali, entao nao da para tirar; afaste o cobre uns 0.2 mm se a fresa nao puder passar
 
 ## Arquivo 1, cobre de cima
 
@@ -39,10 +42,18 @@ shapely 2.2.0, GEOS 3.14.1
 - OK: 1-cobre-cima.nc: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto
 - OK: 2-furos.nc: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto
 - OK: 3-cobre-baixo.nc: cabecalho FRESA, ASCII, inicio e fim padrao, sem Z alto
-- OK: nenhum ponto de corte dentro dos triangulos das garras
+
+## Areas proibidas
+
+- na regra da v5, o sulco entrava ate 0.194 mm nas areas proibidas (o centro da fresa parava na beira)
+- OK: cima: nenhuma passada recortavel entra nas areas proibidas (0.000 mm)
+- OK: cima: a 1a passada, que isola o cobre, entra 0.112 mm e a validacao avisa
+- OK: baixo: nenhuma passada recortavel entra nas areas proibidas (0.000 mm)
+- OK: baixo: a 1a passada, que isola o cobre, entra 0.112 mm e a validacao avisa
+- os caminhos de corte do arquivo 1 so mudam onde as passadas 2 a 4 encostavam nas areas: 71 caminhos contra 63
 
 ## Resultado
 
 **TUDO OK**
 
-Arquivos gerados em `prova/gcode/`.
+Arquivos gerados em `prova/gcode/` (regra atual) e `prova/gcode/regra-v5/` (regra da v5, usada na comparacao).

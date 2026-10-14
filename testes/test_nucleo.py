@@ -53,7 +53,9 @@ def tem(lista, trecho):
 def test_blink_sem_erros(pasta):
     r = validar(pasta)
     assert r.erros == []
-    assert len(r.avisos) == 1 and 'diferente de 0.8' in r.avisos[0]
+    assert len(r.avisos) == 3 and 'diferente de 0.8' in r.avisos[0]
+    # o pad do R4 fica a 0,26 mm do canto proibido: o sulco que o isola encosta nele, nos dois lados
+    assert tem(r.avisos, 'primeira passada no cobre de cima') and tem(r.avisos, 'primeira passada no cobre de baixo')
     assert r.fiduciais == [(-13.0, 0.0), (13.0, 0.0)]
 
 
@@ -95,9 +97,9 @@ def test_fiduciais_desalinhados(pasta):
     assert tem(validar(pasta).erros, 'fiduciais: nenhum par')
 
 
-def test_cobre_na_garra(pasta):
+def test_cobre_na_area_proibida(pasta):
     editar(pasta, 'B_Cu.gbr', antes_do_fim('%TO.N,GND*%\nD10*\nX13000000Y13000000D03*\n%TD*%\n'))
-    assert tem(validar(pasta).erros, 'triangulo de 11 mm da garra')
+    assert tem(validar(pasta).erros, 'cobre de baixo dentro de uma area proibida')
 
 
 def test_origem_fora_do_centro_e_recentrada(pasta, tmp_path_factory):
@@ -207,3 +209,121 @@ def test_kicad_cli_ponta_a_ponta(tmp_path):
     (tmp_path / 'quebrada.kicad_pcb').write_text(t[:seg.start()] + t[seg.end():], encoding='utf-8')
     p, r, _ = kicad.processar(str(tmp_path / 'quebrada.kicad_pcb'))
     assert tem(r.erros, 'partida em 2 pedacos') and tem(r.erros, 'ligacao nao roteada segundo o KiCad')
+
+
+PLANO = os.path.join(AQUI, 'dados', 'blink-v5-plano-gnd')
+
+
+def test_plano_gnd_nao_isola_a_borda(tmp_path):
+    """Blink v5 com plano de GND em B.Cu (preenchido pelo KiCad): nada de corte na beira nem
+    nas areas proibidas, e a isolacao das outras redes continua completa."""
+    from shapely.geometry import Point
+    from shapely.ops import unary_union
+    from fresa import caminhos as c
+    p = placa.carregar(PLANO)
+    r = validacao.validar(p)
+    assert r.erros == []
+    assert not tem(r.avisos, 'borda')
+    assert tem(r.info, 'as 6 desenhada(s) no KiCad')
+    assert tem(r.info, 'o plano GND do cobre de baixo vai ate a beira')
+    res = exportar.gerar(p, r, str(tmp_path), previa=False)
+    x0, y0, x1, y1 = p.limites
+    from shapely import affinity
+    for P, L, esp in ((res.caminhos_cima, p.F, False), (res.caminhos_baixo, p.B, True)):
+        proib = unary_union([affinity.scale(a, -1 if esp else 1, 1, origin=(0, 0)) for a in p.areas_proibidas()])
+        pts = [q for path in P for q in path]
+        assert not any(proib.buffer(-0.001).contains(Point(q)) for q in pts)
+        borda = c.dono_da_borda(L, p.contorno, esp)
+        cu = c.cobre(L, esp)
+        outros = borda['outros'] if borda else cu
+        precisa = cu.buffer(c.R, c.SEG_ISO).simplify(c.SIMPLIFICA).boundary.intersection(outros.buffer(c.R + 0.02))
+        cortes = unary_union([LineString(q) for q in P if len(q) > 1]).buffer(0.01)
+        assert precisa.difference(cortes).length < 0.01          # 1a passada das outras redes inteira
+    # lado de baixo: o plano chega a 0,5 mm da beira e o corte mais perto fica a mais de 1 mm
+    beira = min(min(x - x0, x1 - x, y - y0, y1 - y) for path in res.caminhos_baixo for x, y in path)
+    assert beira > 1.0
+    assert 'borda: o plano GND' in open(res.arquivos[2]).read()
+    assert 'borda:' not in open(res.arquivos[0]).read()
+
+
+def test_sem_plano_nao_tem_dono_da_borda():
+    from fresa import caminhos as c
+    p = placa.carregar(GERBER, PRE)
+    assert c.dono_da_borda(p.B, p.contorno) is None and c.dono_da_borda(p.F, p.contorno) is None
+
+
+def test_area_proibida_tolera_contorno_de_zona_na_beira(pasta):
+    # contorno de zona correndo na diagonal x+y=19 do canto proibido, 5 milionesimos de mm para dentro,
+    # como o arredondamento das coordenadas do Gerber deixa: nao e erro
+    editar(pasta, 'B_Cu.gbr', antes_do_fim(
+        '%TO.N,GND*%\nG36*\nX6000000Y13000005D02*\nG01*\nX13000005Y6000000D01*\nX6000000Y6000000D01*\n'
+        'X6000000Y13000005D01*\nG37*\n%TD*%\n'))
+    p = placa.carregar(str(pasta), PRE)
+    zona = [e for e in p.B if e.regiao][0].geom
+    assert any(zona.intersection(t).area > 1e-6 for t in p.cantos_proibidos())   # sem a folga, seria erro
+    assert not tem(validacao.validar(p).erros, 'area proibida')
+
+
+def test_areas_proibidas_padrao_em_volta_dos_fiduciais():
+    # so Gerbers, sem o arquivo de areas do KiCad: 2x2 mm em volta de cada furo NPTH de 0,8
+    p = placa.carregar(GERBER, PRE)
+    assert p.origem_proibidas == 'padrao'
+    assert sorted(a.bounds for a in p.proibidas_extra) == [(-14.0, -1.0, -12.0, 1.0), (12.0, -1.0, 14.0, 1.0)]
+    assert len(p.areas_proibidas()) == 6
+
+
+def test_corte_nao_entra_em_area_proibida_do_projeto(pasta, tmp_path):
+    # area proibida do KiCad cruzando trilhas: passadas 2 a 4 saem dela, a 1a fica e vira aviso
+    import json
+    from shapely.geometry import Point, Polygon
+    (pasta / (PRE + 'areas-proibidas.json')).write_text(json.dumps([[(2, -10), (8, -10), (8, -6), (2, -6)]]))
+    p = placa.carregar(str(pasta), PRE)
+    assert p.origem_proibidas == 'kicad'
+    r = validacao.validar(p)
+    assert tem(r.erros, 'cobre de baixo dentro de uma area proibida')
+    res = exportar.gerar(p, r, str(tmp_path), previa=False)
+    area = Polygon([(-2, -10), (-8, -10), (-8, -6), (-2, -6)]).buffer(-0.01)   # espelhada no lado de baixo
+    from fresa import caminhos as c
+    passadas_extras = [q for q in res.caminhos_baixo if len(q) > 1]
+    um = c.cobre(p.B, True).buffer(c.R, c.SEG_ISO).simplify(c.SIMPLIFICA).boundary
+    fora_da_1a = [pt for q in passadas_extras for pt in q if um.distance(Point(pt)) > 0.02]
+    assert not any(area.contains(Point(pt)) for pt in fora_da_1a)
+
+
+def test_plano_pode_entrar_na_area_proibida_quando_nao_e_cortado(tmp_path):
+    """Placa do Aluisio de 2026-10-14: as areas proibidas do KiCad (cantos de 10 mm) deixam o
+    plano entrar (copperpour allowed). Nao e erro, e nenhum sulco entra nelas."""
+    d = os.path.join(AQUI, 'dados', 'blink-plano-areas-kicad')
+    p = placa.carregar(d, 'blink blink-roteado-')
+    assert p.origem_proibidas == 'kicad' and len(p.proibidas_extra) == 6
+    r = validacao.validar(p)
+    assert r.erros == []
+    res = exportar.gerar(p, r, str(tmp_path), previa=False)
+    # valem so as areas desenhadas no KiCad: nenhum sulco encosta nelas, nem o da 1a passada
+    assert res.invasao_proibidas == {'cima': 0.0, 'baixo': 0.0}
+    assert not tem(r.avisos, 'area proibida')
+
+
+def test_acabamento_tira_os_dentinhos_na_beira_das_areas(tmp_path):
+    """As passadas 2 a 4 terminam em ponta redonda na beira das areas proibidas; a passada de
+    acabamento ao longo da beira tira o cobre que sobrava entre as pontas (os dentinhos)."""
+    from shapely import affinity
+    from shapely.ops import unary_union
+    from fresa import caminhos as c
+    d = os.path.join(AQUI, 'dados', 'blink-plano-areas-kicad')
+    p = placa.carregar(d, 'blink blink-roteado-')
+    r = validacao.validar(p)
+
+    def dentes(P, esp):
+        proib = unary_union([affinity.scale(a, -1 if esp else 1, 1, origin=(0, 0)) for a in p.areas_proibidas()])
+        sulcos = unary_union([LineString(q).buffer(c.MEIO_SULCO, 8) for q in P if len(q) > 1])
+        fechado = sulcos.buffer(0.15, 8).buffer(-0.15, 8)          # o sulco sem os dentes
+        junto = proib.buffer(2 * c.MEIO_SULCO + 0.05).difference(proib)
+        return fechado.difference(sulcos).intersection(junto).area
+
+    antes = exportar.gerar(p, r, str(tmp_path / 'a'), previa=False, sulco_fora=False)
+    depois = exportar.gerar(p, r, str(tmp_path / 'b'), previa=False)
+    assert dentes(antes.caminhos_cima, False) > 0.01
+    for P, esp in ((depois.caminhos_cima, False), (depois.caminhos_baixo, True)):
+        assert dentes(P, esp) < 0.002
+    assert depois.invasao_proibidas == {'cima': 0.0, 'baixo': 0.0}

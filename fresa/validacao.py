@@ -6,15 +6,17 @@ Modelo eletrico de placa caseira sem furo metalizado:
 """
 from dataclasses import dataclass, field
 
-from shapely.geometry import MultiPolygon, Point, box
+from shapely.geometry import MultiPolygon, Point
 from shapely.ops import unary_union
+
+from . import caminhos
 
 BROCA = 0.8
 VAO_MIN = 0.40
 BORDA_MIN = 1.0
-FIDUCIAL_LIVRE = 1.0   # meia largura da area 2x2 sem cobre em volta do fiducial
 TOL = 1e-3
 R_FRESA = 0.35 / 2    # meia largura da 1a passada (caminhos.R)
+PROIBIDA_TOL = 0.01   # mm: folga contra arredondamento de coordenadas na beira de uma area proibida
 
 
 @dataclass
@@ -196,23 +198,46 @@ def validar(placa):
                   f'{BROCA}: ' + ', '.join(f'{f.diametro:.2f} em X{f.x:.2f} Y{f.y:.2f}' for f in dif))
 
     # fiduciais
-    fid = achar_fiduciais(placa, rel)
-    tudo = unary_union([e.geom for e in placa.F + placa.B])
-    if fid:
-        for f in fid:
-            q = box(f.x - FIDUCIAL_LIVRE, f.y - FIDUCIAL_LIVRE, f.x + FIDUCIAL_LIVRE, f.y + FIDUCIAL_LIVRE)
-            if tudo.intersects(q):
-                rel.aviso(f'tem cobre na area 2x2 mm do fiducial X{f.x:.2f} Y{f.y:.2f}, '
-                          f'a camera pode confundir')
+    achar_fiduciais(placa, rel)
+    n = len(placa.proibidas_extra)
+    if placa.origem_proibidas == 'kicad':
+        rel.info.append(f'areas proibidas: as {n} desenhada(s) no KiCad')
+    else:
+        rel.info.append(f'areas proibidas: os 4 cantos e {n} de {2:.0f}x{2:.0f} mm em volta dos fiduciais')
 
-    # garras e borda
-    for t in placa.triangulos_garras():
-        inter = tudo.intersection(t)
-        if inter.area > 1e-6:
-            rel.erro(f'cobre dentro do triangulo de {11:.0f} mm da garra perto de {_onde(inter)}')
-        elif tudo.buffer(R_FRESA, 32).intersection(t).area > 1e-6:
-            rel.aviso(f'a primeira passada da fresa encosta no triangulo da garra perto de {_onde(t)}')
-    perto = tudo.difference(placa.contorno.buffer(-BORDA_MIN, 32))
-    if perto.area > 1e-6:
-        rel.aviso(f'cobre a menos de {BORDA_MIN} mm da borda perto de {_onde(perto)}')
+    # areas proibidas e borda, lado a lado: um plano que vai ate a beira nao e isolado dela
+    proibidas = placa.areas_proibidas()
+    for lado, L in camadas.items():
+        borda = caminhos.dono_da_borda(L, placa.contorno, proibidas=proibidas)
+        cu = unary_union([e.geom for e in L])
+        # sulco da 1a passada: o anel a R do cobre, com a largura real do sulco
+        anel1 = cu.buffer(R_FRESA, 32).boundary
+        if borda:
+            anel1 = anel1.difference(caminhos.descarte(borda, R_FRESA))
+        corte1 = anel1.buffer(caminhos.MEIO_SULCO, 16)
+        if borda:
+            rel.info.append(f'o plano {borda["rede"]} do cobre de {lado} vai ate a beira: '
+                            f'a borda dele nao e isolada, as outras redes sim')
+        # area proibida = nao pode ter CORTE. O plano dono da borda pode entrar nela, porque o
+        # lado dele nunca e cortado la dentro; o resto do cobre precisa de isolacao em volta.
+        isolar = cu.difference(borda['dono']) if borda else cu
+        for a in proibidas:
+            # o contorno de uma zona costuma cair em cima da beira da area: ignora arredondamento
+            dentro = a.buffer(-PROIBIDA_TOL)
+            inter = isolar.intersection(dentro)
+            if inter.area > 1e-6:
+                rel.erro(f'cobre de {lado} dentro de uma area proibida perto de {_onde(inter)}: '
+                         f'a isolacao em volta dele teria que cortar ali')
+            elif corte1.intersection(dentro).area > 1e-6:
+                sulco = corte1.intersection(dentro)
+                fundo = max(a.exterior.distance(Point(q)) for g in getattr(sulco, 'geoms', [sulco])
+                            for q in g.exterior.coords)
+                rel.aviso(f'o sulco da primeira passada no cobre de {lado} entra {fundo:.2f} mm numa area '
+                          f'proibida perto de {_onde(sulco)}: e ela que isola o cobre ali, entao nao da '
+                          f'para tirar; afaste o cobre uns {fundo + 0.05:.1f} mm se a fresa nao puder passar')
+        perto = cu.difference(placa.contorno.buffer(-BORDA_MIN, 32))
+        if borda:
+            perto = perto.difference(borda['dono'])
+        if perto.area > 1e-6:
+            rel.aviso(f'cobre de {lado} a menos de {BORDA_MIN} mm da borda perto de {_onde(perto)}')
     return rel

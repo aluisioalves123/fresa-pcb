@@ -2,8 +2,12 @@
 import os
 from dataclasses import dataclass
 
+from shapely import affinity
+
 from . import caminhos as cam
 from . import gcode
+
+PROIBIDA_TOL = 0.01    # mm: arredondamento de coordenadas na beira de uma area proibida
 
 NOMES = ('1-cobre-cima.nc', '2-furos.nc', '3-cobre-baixo.nc')
 
@@ -17,30 +21,55 @@ class Resultado:
     contorno_cima: list
     contorno_baixo: list
     furos: list
-    invasao_garras: dict     # lado -> maior entrada de ponto de corte no triangulo (mm)
+    invasao_proibidas: dict  # lado -> quanto o corte mais fundo entra numa area proibida (mm)
 
 
-def _invasao(placa, P):
-    """Quanto a ponta entra nos triangulos das garras (0 = nada)."""
-    x0, y0, x1, y1 = placa.limites
-    g = 11.0
+def _invasao(proibidas, P):
+    """Quanto o SULCO (nao so o centro da fresa) entra nas areas proibidas, em mm (0 = nada)."""
+    from shapely.geometry import LineString, Point
     pior = 0.0
-    for p in P:
-        for x, y in p:
-            for v in (x + y - (x1 + y1 - g), -x + y - (-x0 + y1 - g),
-                      -x - y - (-x0 - y0 - g), x - y - (x1 - y0 - g)):
-                pior = max(pior, v / 2 ** 0.5)
+    linhas = [LineString(p) for p in P if len(p) > 1]
+    for a in proibidas:
+        dentro = a.buffer(-PROIBIDA_TOL)
+        for ln in linhas:
+            d = ln.distance(dentro)
+            if d >= cam.MEIO_SULCO:
+                continue
+            if d > 0:
+                pior = max(pior, cam.MEIO_SULCO - d)
+            else:
+                fundo = max((a.exterior.distance(Point(q)) for q in ln.coords if dentro.contains(Point(q))),
+                            default=0.0)
+                pior = max(pior, cam.MEIO_SULCO + fundo)
     return pior
 
 
-def gerar(placa, relatorio, saida, previa=True):
+def gerar(placa, relatorio, saida, previa=True, sulco_fora=True):
+    """sulco_fora=False reproduz o gerador da v5, que parava o CENTRO da fresa na beira das
+    areas proibidas (o sulco entrava meio sulco nelas). So a prova usa, para comparar."""
     os.makedirs(saida, exist_ok=True)
     fid = relatorio.fiduciais
     fid_baixo = sorted([(-x, y) for x, y in fid])
     livre = placa.area_livre()
+    if sulco_fora:
+        livre = livre.buffer(-cam.MEIO_SULCO, cam.SEG_ISO)
 
-    Pc = cam.ordenar(cam.isolacao(cam.cobre(placa.F), livre))
-    Pb = cam.ordenar(cam.isolacao(cam.cobre(placa.B, espelhar=True), livre))
+    proibidas = placa.areas_proibidas()
+    borda_c = cam.dono_da_borda(placa.F, placa.contorno, proibidas=proibidas)
+    borda_b = cam.dono_da_borda(placa.B, placa.contorno, espelhar=True, proibidas=proibidas)
+    # a regra antiga tambem parava o centro na beira para o lado do plano
+    for b in (borda_c, borda_b):
+        if b and not sulco_fora:
+            b['proibidas'] = b['proibidas'].buffer(-cam.MEIO_SULCO, cam.SEG_ISO)
+    # o lado de baixo e cortado espelhado: as areas proibidas tambem
+    livre_b = livre if not placa.proibidas_extra else affinity.scale(livre, -1, 1, origin=(0, 0))
+    cu_c, cu_b = cam.cobre(placa.F), cam.cobre(placa.B, espelhar=True)
+    Pc = cam.isolacao(cu_c, livre, borda_c)
+    Pb = cam.isolacao(cu_b, livre_b, borda_b)
+    if sulco_fora:   # acabamento na beira das areas proibidas: tira os dentinhos entre as passadas
+        Pc += cam.acabamento(cu_c, livre, borda_c)
+        Pb += cam.acabamento(cu_b, livre_b, borda_b)
+    Pc, Pb = cam.ordenar(Pc), cam.ordenar(Pb)
 
     pts = []
     for f in placa.furos:
@@ -50,10 +79,12 @@ def gerar(placa, relatorio, saida, previa=True):
 
     nome = placa.nome.upper()
     g1, H1 = gcode.arquivo_cobre(placa, Pc, 1, fid,
-                                 f'{nome}: fase 1, cobre de CIMA, com voos de teste e pausa no inicio')
+                                 f'{nome}: fase 1, cobre de CIMA, com voos de teste e pausa no inicio',
+                                 borda_c and borda_c['rede'])
     g2 = gcode.arquivo_furos(placa, furos, fid, f'{nome}: fase 2, {len(furos)} furos')
     g3, H3 = gcode.arquivo_cobre(placa, Pb, 3, fid_baixo,
-                                 f'{nome}: fase 3, cobre de BAIXO, placa virada como pagina de livro')
+                                 f'{nome}: fase 3, cobre de BAIXO, placa virada como pagina de livro',
+                                 borda_b and borda_b['rede'])
     arquivos = []
     for n, G in zip(NOMES, (g1, g2, g3)):
         gcode.conferir(G)
@@ -63,7 +94,8 @@ def gerar(placa, relatorio, saida, previa=True):
         arquivos.append(c)
 
     res = Resultado(arquivos, [], Pc, Pb, H1, H3, furos,
-                    {'cima': _invasao(placa, Pc), 'baixo': _invasao(placa, Pb)})
+                    {'cima': _invasao(proibidas, Pc),
+                     'baixo': _invasao([affinity.scale(a, -1, 1, origin=(0, 0)) for a in proibidas], Pb)})
     if previa:
         from . import previa as pv
         res.previas = pv.desenhar(placa, res, fid, saida)

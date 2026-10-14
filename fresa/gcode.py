@@ -9,7 +9,7 @@ import unicodedata
 
 from . import caminhos as cam
 
-DEPTH = 0.2
+DEPTH = cam.DEPTH
 F_CORTE, F_MERGULHO, F_VOO = 100, 30, 600
 Z_APROX, Z_DESLOC = 1, 2
 Z_VOO1, Z_VOO1_ENTRE, Z_VOO2 = 2, 5, 0.5
@@ -51,7 +51,7 @@ def voos(P):
               f'G1 X{f3(b[0])} Y{f3(b[1])} F{F_VOO}', 'G4 P2', f'G0 Z{Z_VOO1_ENTRE}']
     H = cam.contorno_voo(P)
     G += [comentario('VOO 2 no contorno de tudo o que vai ser cortado, fresa DESLIGADA, Z0.5: '
-                     'confira se a ponta passa longe das garras'),
+                     'confira se a ponta passa longe das areas proibidas'),
           f'G0 X{f3(H[0][0])} Y{f3(H[0][1])}', f'G0 Z{Z_VOO2}', 'G4 P2']
     G += [f'G1 X{f3(x)} Y{f3(y)} F{F_VOO}' for x, y in H[1:] + [H[0]]]
     G += ['G4 P2', TOPO, 'G0 X0.000 Y0.000',
@@ -70,7 +70,7 @@ def cortes(P):
     return G
 
 
-def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo):
+def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None):
     lado = 'cima' if fase == 1 else 'baixo'
     extra = '' if fase == 1 else ' espelhado=x corrigir=sim'
     G = cabecalho_maquina(fase, lado, 'vbit30', placa, fiduciais_arquivo, extra)
@@ -82,6 +82,9 @@ def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo):
     G += [comentario(titulo),
           comentario(f'V-bit 30 graus | {cam.PASSES} passadas | profundidade {DEPTH} | sem heightmap'),
           comentario('zero XY: G54 apos homing | zero Z: probe no cobre, uma vez so, no centro da placa')]
+    if rede_borda:
+        G.append(comentario(f'borda: o plano {rede_borda} vai ate a beira e nao e isolado dela, '
+                            f'todas as outras redes tem isolacao completa'))
     G += INICIO
     gv, H = voos(P)
     G += gv + SPIN + cortes(P) + FIM

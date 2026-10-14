@@ -14,7 +14,7 @@ Tudo o que está aqui foi medido ou validado fresando placas de verdade. A espec
 |---|---|---|
 | 1 | Núcleo em Python: Gerbers → validações → 3 arquivos `.nc` com voos de teste | pronto, provado contra a blink v5 |
 | 2 | Plugin do KiCad 10: um botão que valida e gera os 3 arquivos | pronto |
-| 3 | Plugin do Candle: calibração da câmera e virada da placa | a fazer |
+| 3 | Plugin do Candle: calibração da câmera e virada da placa | pronto, falta a primeira placa de verdade |
 | 4 | Plugin do Candle: assistente de fases e travas | a fazer |
 
 ## Plugin do KiCad
@@ -37,6 +37,36 @@ O botão **Exportar para a fresa**:
 4. com erro, mostra a lista e não deixa gerar; sem erro, mostra **Gerar arquivos** (ou **Gerar mesmo assim**, se houver aviso);
 5. **Salvar em** mostra a pasta de saída (padrão: `gcode/` ao lado do projeto); **Trocar pasta...** escolhe outra, e o plugin lembra a escolha para cada placa (em `%APPDATA%/fresa-pcb/pastas.json`);
 6. ao gerar, grava os 3 `.nc`, as prévias e os Gerbers na pasta escolhida e mostra as prévias.
+
+## Plugin do Candle
+
+Painel **Fresa PCB** na janela Usuário do Candle (QtScript, `candle_plugin/fresa/`). A câmera continua na janela **Camera** oficial: você mira por ela e o painel lê a posição da máquina, faz a conta e troca o programa carregado pelo corrigido.
+
+Instalar ou atualizar (o Windows pede permissão de administrador, porque a pasta de plugins fica em Arquivos de Programas):
+
+```
+python instalar_plugin_candle.py
+```
+
+Depois feche e abra o Candle.
+
+**Calibrar a câmera** (sempre que mexer no suporte): **Olhar a cruz 0,0** sobe ao topo (`G53 G0 Z-2`) e leva a câmera até a cruz gravada na mesa; ajuste só X e Y com o jog até a cruz ficar no centro da mira e clique **Calibrar aqui**. Valor atual: X 35,065, Y -6,000.
+
+**Virar a placa (fase 3):**
+
+1. carregue o `3-cobre-baixo.nc`; o painel lê os fiduciais do cabeçalho e avisa que precisa de correção;
+2. vire a placa como página de livro, da esquerda para a direita, e prenda;
+3. **Ir** no fiducial 1 leva a câmera aonde ele deveria estar; ajuste com o jog até o furo ficar no centro da mira e **Marcar**;
+4. **Ir** no fiducial 2 já mira corrigido pelo erro do primeiro; ajuste e **Marcar**;
+5. o painel mostra a distância de projeto e a medida; se diferirem mais de 0,1 mm, pede para mirar de novo;
+6. **Aplicar correção** grava `3-cobre-baixo-CORRIGIDO.nc` ao lado do original e carrega no Candle (sem a trava, com os voos girados e passando pelo centro real);
+7. **Broca no centro** leva a broca ao centro real da placa para o probe do Z.
+
+Os campos de posição aceitam qualquer par de furos: o mesmo método recoloca uma placa que saiu do lugar sem virar, usando 2 furos que já existem, o mais afastados possível.
+
+O plugin só move a máquina parada e pronta (Idle) e sem programa rodando. Toda ida sobe antes ao topo da máquina.
+
+Testes sem o Candle: `candle_plugin/testes/simulador.js` imita o Candle em Node e os testes em `testes/test_candle_nucleo.py` rodam a virada completa da v5 nele, conferindo que o arquivo corrigido é idêntico ao do núcleo em Python.
 
 ## Linha de comando
 
@@ -67,8 +97,8 @@ Exportação esperada do KiCad (o plugin já faz assim): Gerber **X2 com atribut
 
 Antes de gerar qualquer arquivo:
 
-- **erro:** rede partida ou ligação não roteada, curto entre redes, trilha de cima encostando em pino de componente (a solda é só embaixo), fiduciais faltando ou desalinhados, cobre dentro dos triângulos das garras, Gerber sem atributos de rede;
-- **aviso:** vão entre redes menor que 0,40 mm, furo diferente de 0,8, primeira passada encostando na garra, cobre a menos de 1 mm da borda ou na área do fiducial.
+- **erro:** rede partida ou ligação não roteada, curto entre redes, trilha de cima encostando em pino de componente (a solda é só embaixo), fiduciais faltando ou desalinhados, cobre que precisa de isolação dentro de uma área proibida, Gerber sem atributos de rede;
+- **aviso:** vão entre redes menor que 0,40 mm, furo diferente de 0,8, primeira passada entrando numa área proibida, cobre a menos de 1 mm da borda (menos o plano dono da borda).
 
 ## Prova com a blink v5
 
@@ -97,7 +127,8 @@ Os desvios de milésimos vêm da versão do shapely/GEOS (o `simplify(0.005)` es
 - **Trava do arquivo 3:** comentário que começa com `( ATENCAO: arquivo SEM correcao` seguido de `M0`, logo após o cabeçalho. A correção tira as duas linhas e troca `corrigir=sim` por `corrigir=feito`.
 - **Pausa dos voos:** vai para o centro da placa com `G0 X0.000 Y0.000`, então depois da correção a pausa fica no centro real.
 - **Voo 2:** casco convexo de todos os pontos de corte; tira, um por vez, o vértice que muda menos o contorno, enquanto a mudança for menor que 0,3 mm. Na blink dá exatamente os 13 vértices do exemplo.
-- **Garras:** 4 semiplanos a partir dos cantos do retângulo que envolve o Edge.Cuts (na 30×30 vira `|x|+|y| ≤ 19`).
+- **Plano que vai até a borda:** se uma zona preenchida (plano, normalmente GND) ocupa a faixa de 3 mm junto da beira, ela vira a "dona da borda". Os caminhos do lado do plano que ficam a mais de 0,5 mm de qualquer outra rede são descartados em todas as passadas, inclusive a 1ª, e dentro das áreas proibidas o lado do plano nunca é cortado. A faixa de cobre que sobra na beira passa a ser do plano. Isso nunca cria curto, porque todas as outras redes mantêm a 1ª passada inteira. Sem plano, o corte é idêntico ao da v5. O arquivo `.nc` avisa no cabeçalho quando isso acontece. Teste: `testes/dados/blink-v5-plano-gnd/`, a blink com um plano de GND em B.Cu preenchido pelo KiCad.
+- **Áreas proibidas:** onde a fresa não pode cortar. São as que o projeto desenha no KiCad (rule areas com trilha ou cobre proibido): cantos para os grampos, área em volta dos fiduciais, o que for. O tamanho delas é decisão de quem projeta; o plugin só garante que nenhum sulco entre nelas. Pela linha de comando, só com Gerbers, que não trazem rule areas, vale um padrão: triângulos de 11 mm nos cantos e 2×2 mm em volta de cada furo NPTH de 0,8. Área proibida quer dizer **sem corte**, não sem cobre: trilha, pad ou qualquer cobre que precise de isolação em volta dentro dela é erro, mas o plano dono da borda pode entrar (é o caso das rule areas com "copperpour allowed"), porque o lado dele nunca é cortado lá dentro. Quem não pode entrar é a **beira do sulco** (0,41 mm de largura), não só o centro da fresa: as passadas 2 a 4 terminam meio sulco antes da área, e uma passada de acabamento corre ao longo da beira dela, ligando a 1ª passada à última, para não sobrar os dentinhos de cobre entre as pontas redondas das passadas. A 1ª passada isola o cobre e não pode ser recortada; se o sulco dela encostar numa área proibida, a validação avisa quanto entra e onde (na blink v5, o pad do R4 a 0,26 mm do canto faz o sulco encostar 0,11 mm). O gerador original da v5 parava o centro da fresa na beira, e o sulco entrava até 0,19 mm; a prova compara com os arquivos da v5 usando aquela regra e confere a nova à parte.
 - **Origem:** se os Gerbers não vierem com a origem no centro, o núcleo desloca tudo e informa.
 - **Conectividade sem furo metalizado:** pino de componente liga só embaixo; só a via liga cima e baixo. Ilha de cima que é só pad de componente é ignorada.
 - **Furos:** todos com a broca 0,8, ordem por vizinho mais próximo a partir do centro.
@@ -108,18 +139,21 @@ Os desvios de milésimos vêm da versão do shapely/GEOS (o `simplify(0.005)` es
 ```
 fresa/gerber.py           leitor Gerber X2 (formato, polegadas, arcos, regiões)
 fresa/excellon.py         leitor de furação
-fresa/placa.py            carrega, centraliza, garras
+fresa/placa.py            carrega, centraliza, áreas proibidas
 fresa/validacao.py        validações
 fresa/caminhos.py         isolação (igual à v5), ordem, contorno do voo 2
 fresa/gcode.py            cabeçalhos, voos de teste, cortes e furos
 fresa/exportar.py         junta tudo
 fresa/previa.py           PNG de cada lado, tema escuro
 fresa/corrigir.py         correção pelos fiduciais (referência para o plugin do Candle)
-fresa/kicad.py            ponte com o kicad-cli
+fresa/kicad.py            ponte com o kicad-cli e leitura das áreas proibidas do .kicad_pcb
 fresa/cli.py              linha de comando
 kicad_plugin/             plugin do KiCad (ActionPlugin)
 instalar_plugin_kicad.py  instala o plugin e o ambiente .venv-kicad
+candle_plugin/fresa/      plugin do Candle (painel, nucleo.js com a matemática)
+candle_plugin/testes/     simulador do Candle em Node
+instalar_plugin_candle.py instala o plugin do Candle
 provar_blink_v5.py        prova contra os arquivos reais da blink v5
 referencias/              código e G-code que fresaram as placas que deram certo
-testes/                   testes, com os Gerbers da blink v5
+testes/                   testes, com os Gerbers da blink v5 (com e sem plano de GND)
 ```

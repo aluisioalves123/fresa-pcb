@@ -5,6 +5,7 @@ Nao depende da API do KiCad. A casca (kicad_plugin/) so salva a placa aberta e c
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -62,6 +63,45 @@ def ligacoes_nao_roteadas(pcb, pasta, cli):
     return out
 
 
+def _blocos(texto, cabeca):
+    """Cada bloco '(cabeca ...)' do arquivo, com os parenteses casados."""
+    i = 0
+    while True:
+        i = texto.find('(' + cabeca, i)
+        if i < 0:
+            return
+        prof = 0
+        for j in range(i, len(texto)):
+            prof += (texto[j] == '(') - (texto[j] == ')')
+            if prof == 0:
+                yield texto[i:j + 1]
+                break
+        i += 1
+
+
+def areas_proibidas(pcb):
+    """Areas proibidas (rule areas com cobre proibido) do .kicad_pcb, em coordenadas de
+    Gerber exportado com a origem de furacao: X = x - ox, Y = oy - y (o KiCad tem Y para baixo)."""
+    texto = open(pcb, encoding='utf-8').read()
+    m = re.search(r'\(aux_axis_origin\s+(-?[\d.]+)\s+(-?[\d.]+)\)', texto)
+    ox, oy = (float(m.group(1)), float(m.group(2))) if m else (0.0, 0.0)
+    out = []
+    for z in _blocos(texto, 'zone'):
+        if '(keepout' not in z:
+            continue
+        if not re.search(r'\((?:tracks|copperpour) not_allowed\)', z):
+            continue
+        camadas = re.findall(r'"([^"]*Cu)"', ' '.join(re.findall(r'\(layers?\s+[^)]*\)', z)))
+        if not camadas:
+            continue
+        for pol in _blocos(z, 'polygon'):
+            pts = [((float(x) - ox), (oy - float(y)))
+                   for x, y in re.findall(r'\(xy\s+(-?[\d.]+)\s+(-?[\d.]+)\)', pol)]
+            if len(pts) >= 3:
+                out.append(pts)
+    return out
+
+
 def processar(pcb, cli=None, pasta_saida=None, pasta_fab=None):
     """Exporta, carrega e valida. Devolve (placa, relatorio, pasta_gcode)."""
     pcb = os.path.abspath(pcb)
@@ -71,6 +111,8 @@ def processar(pcb, cli=None, pasta_saida=None, pasta_fab=None):
     pasta_gcode = pasta_saida or os.path.join(os.path.dirname(pcb), 'gcode')
     pasta_fab = pasta_fab or os.path.join(pasta_gcode, 'gerber')
     prefixo = exportar_fabricacao(pcb, pasta_fab, cli)
+    with open(os.path.join(pasta_fab, prefixo + placa_mod.ARQ_PROIBIDAS), 'w', encoding='utf-8') as f:
+        json.dump(areas_proibidas(pcb), f)
     p = placa_mod.carregar(pasta_fab, prefixo)
     rel = validacao.validar(p)
     for item in ligacoes_nao_roteadas(pcb, pasta_fab, cli):
