@@ -1,0 +1,23 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,10.0.5*%
+%TF.CreationDate,2026-10-13T19:31:43-03:00*%
+%TF.ProjectId,blink blink-roteado,626c696e-6b20-4626-9c69-6e6b2d726f74,rev?*%
+%TF.SameCoordinates,PX6dac2c0PY6dac2c0*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 10.0.5) date 2026-10-13 19:31:43*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.050000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X-15000000Y15000000D02*
+X15000000Y15000000D01*
+X15000000Y-15000000D01*
+X-15000000Y-15000000D01*
+X-15000000Y15000000D01*
+M02*

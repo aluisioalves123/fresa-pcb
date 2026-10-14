@@ -1,0 +1,6 @@
+.venv/
+.venv-kicad/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+prova/gcode/

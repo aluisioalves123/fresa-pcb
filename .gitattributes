@@ -1,0 +1,10 @@
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.png binary
+*.nc -text
+*.gbr -text
+*.drl -text
+*.gbrjob -text
+*.kicad_pcb -text
