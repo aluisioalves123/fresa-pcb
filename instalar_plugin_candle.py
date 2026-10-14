@@ -1,8 +1,9 @@
-"""Instala (ou atualiza) o plugin Fresa PCB no Candle.
+"""Instala (ou atualiza) os plugins Fresa PCB no Candle.
 
-  python instalar_plugin_candle.py [--candle "C:\Program Files\Candle"]
+  python instalar_plugin_candle.py [--candle "C:/Program Files/Candle"]
 
-Copia candle_plugin/fresa para <Candle>/candleplugins/fresa. Essa pasta fica em
+Copia candle_plugin/fresa (correcao pelos fiduciais, com a camera) e candle_plugin/fresaprobe
+(trava do probe, sem janela) para <Candle>/candleplugins. Essa pasta fica em
 Arquivos de Programas, entao o Windows pede permissao de administrador: o script
 se reabre como administrador sozinho. Feche e abra o Candle depois.
 """
@@ -14,15 +15,19 @@ import subprocess
 import sys
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
-ORIGEM = os.path.join(AQUI, 'candle_plugin', 'fresa')
+PLUGINS = ('fresa', 'fresaprobe')
 
 
 def copiar(candle):
-    destino = os.path.join(candle, 'candleplugins', 'fresa')
-    if os.path.isdir(destino):
-        shutil.rmtree(destino)
-    shutil.copytree(ORIGEM, destino, ignore=shutil.ignore_patterns('__pycache__'))
-    return destino
+    destinos = []
+    for nome in PLUGINS:
+        destino = os.path.join(candle, 'candleplugins', nome)
+        if os.path.isdir(destino):
+            shutil.rmtree(destino)
+        shutil.copytree(os.path.join(AQUI, 'candle_plugin', nome), destino,
+                        ignore=shutil.ignore_patterns('__pycache__'))
+        destinos.append(destino)
+    return ', '.join(destinos)
 
 
 def main():
@@ -44,8 +49,8 @@ def main():
             sys.exit('Permissao negada: o plugin nao foi instalado.')
         print('Continue na janela de administrador que abriu. Depois feche e abra o Candle.')
         return
-    print(f'Plugin instalado em {destino}')
-    print('Feche e abra o Candle: o painel "Fresa PCB" aparece na janela Usuario.')
+    print(f'Plugins instalados em {destino}')
+    print('Feche e abra o Candle.')
     if a.elevado:
         input('Enter para fechar...')
 

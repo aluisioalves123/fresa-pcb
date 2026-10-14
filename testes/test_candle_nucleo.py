@@ -173,3 +173,63 @@ def test_sem_camera_escolhida_avisa(arq3_copia, tmp_path, monkeypatch):
     monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
     s = simular(arq3_copia, [{'foto': 'f'}], tmp_path)
     assert 'Escolha a câmera' in s['fotos'][0]['lblResultado']['text']
+
+
+SIM_PROBE = os.path.join(RAIZ, 'candle_plugin', 'testes', 'simulador_probe.js')
+
+
+def trava(roteiro, tmp_path):
+    r_json = tmp_path / 'roteiro_probe.json'
+    r_json.write_text(json.dumps(roteiro))
+    r = subprocess.run([NODE, SIM_PROBE, str(r_json)], capture_output=True, text=True, encoding='utf-8')
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)
+
+
+@pytest.fixture
+def dois_arquivos(arquivo3, tmp_path):
+    a, b = tmp_path / '1-cobre-cima.nc', tmp_path / '2-furos.nc'
+    shutil.copy(arquivo3, a)
+    shutil.copy(arquivo3, b)
+    return str(a), str(b)
+
+
+def test_probe_feito_depois_de_abrir_nao_pergunta(dois_arquivos, tmp_path):
+    a, _ = dois_arquivos
+    s = trava([{'abrir': a}, {'tick': 1}, {'probe': True}, {'remetente': 0}], tmp_path)
+    assert s == {'tempoReal': [], 'perguntas': 0}
+
+
+def test_esqueceu_o_probe_segura_e_para(dois_arquivos, tmp_path):
+    a, _ = dois_arquivos
+    s = trava([{'abrir': a}, {'tick': 1}, {'responder': 'nao'}, {'remetente': 0}], tmp_path)
+    assert s == {'tempoReal': ['!', 'RESET'], 'perguntas': 1}
+
+
+def test_esqueceu_mas_confirma_que_fez_continua(dois_arquivos, tmp_path):
+    a, _ = dois_arquivos
+    s = trava([{'abrir': a}, {'tick': 1}, {'responder': 'sim'}, {'remetente': 0},
+               {'remetente': 2}, {'remetente': 0}, {'remetente': 4}, {'remetente': 0}], tmp_path)
+    # pergunta uma vez so: nem ao voltar da pausa, nem ao rodar de novo o mesmo arquivo
+    assert s == {'tempoReal': ['!', '~'], 'perguntas': 1}
+
+
+def test_probe_que_falhou_nao_conta(dois_arquivos, tmp_path):
+    a, _ = dois_arquivos
+    s = trava([{'abrir': a}, {'tick': 1}, {'probe': False}, {'responder': 'nao'}, {'remetente': 0}], tmp_path)
+    assert s['perguntas'] == 1
+
+
+def test_abrir_outro_arquivo_pede_probe_de_novo(dois_arquivos, tmp_path):
+    # troca de ferramenta (arquivo de furos) ou arquivo corrigido pela camera: probe novo
+    a, b = dois_arquivos
+    s = trava([{'abrir': a}, {'tick': 1}, {'probe': True}, {'remetente': 0}, {'remetente': 4},
+               {'abrir': b}, {'tick': 1}, {'responder': 'nao'}, {'remetente': 0}], tmp_path)
+    assert s == {'tempoReal': ['!', 'RESET'], 'perguntas': 1}
+
+
+def test_arquivo_que_nao_e_fresa_nao_e_vigiado(tmp_path):
+    q = tmp_path / 'qualquer.nc'
+    q.write_text('G21 G90\nG0 X1 Y1\nM30\n')
+    s = trava([{'abrir': str(q)}, {'tick': 1}, {'remetente': 0}], tmp_path)
+    assert s == {'tempoReal': [], 'perguntas': 0}

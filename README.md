@@ -42,7 +42,7 @@ O botão **Exportar para a fresa**:
 
 Faz uma coisa só: com o desenho aberto no Candle, você olha a câmera, centraliza cada fiducial na mira, marca os dois e ele corrige o desenho. Não move a máquina. É a janela **Fresa PCB** (`candle_plugin/fresa/`): a câmera em cima, os botões embaixo. A câmera e a mira são as mesmas configuradas no plugin Camera oficial (Configurações do Candle, seção Camera). O Windows só deixa um programa usar a câmera por vez: feche a janela Camera oficial enquanto usa a do Fresa PCB.
 
-Instalar ou atualizar (o Windows pede permissão de administrador, porque a pasta de plugins fica em Arquivos de Programas):
+Instalar ou atualizar os dois plugins do Candle (o Windows pede permissão de administrador, porque a pasta de plugins fica em Arquivos de Programas):
 
 ```
 python instalar_plugin_candle.py
@@ -60,6 +60,15 @@ Uso, na fase 3:
 Serve também para uma placa que saiu do lugar sem virar: abra o arquivo da fase em que parou e marque os fiduciais.
 
 O deslocamento câmera → broca (posição da máquina com a cruz 0,0 da mesa no centro da mira, máquina no topo) fica nas **Configurações do Candle**, na seção Fresa PCB. Valor atual: X 35,065, Y -6,000.
+
+### Trava do probe
+
+Um segundo plugin, sem janela (`candle_plugin/fresaprobe/`), para não rodar sem probe do Z. Quando você manda rodar um arquivo FRESA, ele confere se houve um probe que encostou de verdade (`[PRB:...:1]`) **depois que esse arquivo foi aberto**: arquivo novo pede probe novo, o que cobre a troca de ferramenta, a placa virada e o arquivo corrigido pela câmera. Se não houve, ele segura a máquina na hora (feed hold, enquanto ela ainda está subindo ao topo) e pergunta:
+
+- **Não:** para o programa (reset durante o hold, sem perder a posição). Faça o probe e rode de novo.
+- **Sim:** continua (para quando o probe foi feito antes de abrir o arquivo). Não pergunta de novo para o mesmo arquivo.
+
+Com o probe feito, nada aparece. Arquivos que não são FRESA não são vigiados.
 
 Testes sem o Candle: `candle_plugin/testes/simulador.js` imita o Candle em Node (inclusive a regra do QtScript de só enxergar os filhos diretos de cada widget) e os testes em `testes/test_candle_nucleo.py` rodam a correção da v5 nele, conferindo que o arquivo corrigido é idêntico ao do núcleo em Python.
 
@@ -146,7 +155,8 @@ fresa/kicad.py            ponte com o kicad-cli e leitura das áreas proibidas d
 fresa/cli.py              linha de comando
 kicad_plugin/             plugin do KiCad (ActionPlugin)
 instalar_plugin_kicad.py  instala o plugin e o ambiente .venv-kicad
-candle_plugin/fresa/      plugin do Candle (painel, nucleo.js com a matemática)
+candle_plugin/fresa/      plugin do Candle: câmera, marcar fiduciais, corrigir (nucleo.js tem a matemática)
+candle_plugin/fresaprobe/ plugin do Candle sem janela: trava do probe do Z
 candle_plugin/testes/     simulador do Candle em Node
 instalar_plugin_candle.py instala o plugin do Candle
 provar_blink_v5.py        prova contra os arquivos reais da blink v5
