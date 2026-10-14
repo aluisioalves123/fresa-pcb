@@ -78,6 +78,10 @@ function montarArvore(xml) {
         if (t.indexOf("</") === 0) { pilha.pop(); return; }
         var nome = (/name="([^"]+)"/.exec(t) || [])[1];
         var w = widget();
+        if (/class="CameraWidget"/.test(t)) {   // o que o componente de camera informa
+            w.availableCameras = JSON.parse(process.env.CAMERAS || '["USB2.0 PC CAMERA"]');
+            w.availableResolutions = ["1280x720", "640x480", "320x240"];
+        }
         if (nome) pilha[pilha.length - 1][nome] = w;
         todos[nome] = w;                    // indice plano so para o simulador mexer
         if (!raiz) raiz = w;

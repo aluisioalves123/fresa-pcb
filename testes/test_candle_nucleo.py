@@ -169,10 +169,29 @@ def test_janela_tem_a_camera_com_a_configuracao_do_plugin_camera(arq3_copia, tmp
         'mirrorHorizontal': False, 'mirrorVertical': True}
 
 
-def test_sem_camera_escolhida_avisa(arq3_copia, tmp_path, monkeypatch):
-    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
+def test_camera_nao_escolhida_usa_a_da_especificacao_com_mira_no_centro(arq3_copia, tmp_path, monkeypatch):
+    # como esta no Candle do Aluisio: o plugin Camera oficial nunca teve camera escolhida
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': '', 'resolution': '1280x720', 'zoom': '1',
+                                                    'position': '0, 0', 'aimPosition': '0, 0'}))
+    monkeypatch.setenv('CAMERAS', json.dumps(['Integrated Webcam', 'USB2.0 PC CAMERA']))
     s = simular(arq3_copia, [{'foto': 'f'}], tmp_path)
-    assert 'Escolha a câmera' in s['fotos'][0]['lblResultado']['text']
+    c = s['camera']
+    assert c['cameraName'] == 'USB2.0 PC CAMERA' and c['resolution'] == [640, 480] and c['aimPos'] == [0.5, 0.5]
+    assert 'Leve a câmera' in s['fotos'][0]['lblResultado']['text']   # sem aviso de camera
+
+
+def test_sem_camera_ligada_avisa(arq3_copia, tmp_path, monkeypatch):
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
+    monkeypatch.setenv('CAMERAS', '[]')
+    s = simular(arq3_copia, [{'pos': M1}, {'clicar': 'cmdMarcar1'}, {'foto': 'f'}], tmp_path)
+    assert 'Nenhuma câmera encontrada' in s['fotos'][0]['lblResultado']['text']
+
+
+def test_duas_cameras_desconhecidas_pede_para_escolher(arq3_copia, tmp_path, monkeypatch):
+    monkeypatch.setenv('CAMERA_CONFIG', json.dumps({'name': ''}))
+    monkeypatch.setenv('CAMERAS', json.dumps(['Cam A', 'Cam B']))
+    s = simular(arq3_copia, [{'foto': 'f'}], tmp_path)
+    assert 'escolha qual' in s['fotos'][0]['lblResultado']['text'] and 'Cam A, Cam B' in s['fotos'][0]['lblResultado']['text']
 
 
 SIM_PROBE = os.path.join(RAIZ, 'candle_plugin', 'testes', 'simulador_probe.js')

@@ -121,7 +121,9 @@ function atualizar() {
 
     var t = pronto ? transformacao() : null;
     ui.cmdCorrigir.enabled = !!(t && t.ok);
-    if (!pronto) {
+    if (avisoCamera) {
+        ui.lblResultado.text = cor(AMARELO, avisoCamera);
+    } else if (!pronto) {
         ui.lblResultado.text = "";
     } else if (!t) {
         ui.lblResultado.text = cor(CINZA, "Leve a câmera até cada fiducial com o jog, centralize na mira e marque.");
@@ -184,23 +186,56 @@ function par(texto, conv) {
     return [conv(l[0]), conv(l[1])];
 }
 
+var CAMERA_PADRAO = "USB2.0 PC CAMERA";   // endoscopio da especificacao
+var RESOLUCAO_PADRAO = "640x480";
+var avisoCamera = "";
+
+// Camera que vale: a escolhida no plugin Camera oficial; se nenhuma foi escolhida, a da
+// especificacao ou a unica ligada.
+function escolherCamera(disponiveis) {
+    var l = [];
+    for (var i = 0; i < disponiveis.length; i++) l.push(String(disponiveis[i]));
+    for (var k = 0; k < l.length; k++) if (l[k].indexOf(CAMERA_PADRAO) >= 0) return l[k];
+    return l.length == 1 ? l[0] : "";
+}
+
 function configurarCamera() {
     var g = app.storage.group("CameraPlugin");
     var c = ui.camMain;
-    var r = String(g.value("resolution", ""));
-    if (r.indexOf("x") > 0) c.resolution = par(r.replace("x", ","), parseInt);
+    var nome = String(g.value("name", ""));
+    var configurada = nome !== "";
+    if (!configurada) nome = escolherCamera(c.availableCameras || []);
+    if (configurada) {
+        var r = String(g.value("resolution", ""));
+        if (r.indexOf("x") > 0) c.resolution = par(r.replace("x", ","), parseInt);
+    }
     c.zoom = parseFloat(g.value("zoom", 1));
     c.pos = par(g.value("position", "0, 0"), parseInt);
-    c.aimPos = par(g.value("aimPosition", "0, 0"), parseFloat);
+    // a mira e relativa a imagem: 0,0 e o canto, 0.5,0.5 e o centro. Nunca configurada, vai ao centro.
+    var mira = par(g.value("aimPosition", "0, 0"), parseFloat);
+    if (!mira[0] && !mira[1]) mira = [0.5, 0.5];
+    c.aimPos = mira;
     c.aimSize = parseInt(g.value("aimSize", 20));
     c.aimLineWidth = parseInt(g.value("aimLineWidth", 1));
     c.aimColor = parseInt(g.value("aimColor", -65536));
     c.mirrorHorizontal = String(g.value("mirrorHorizontal", false)) === "true";
     c.mirrorVertical = String(g.value("mirrorVertical", false)) === "true";
-    c.cameraName = String(g.value("name", ""));
-    if (!c.cameraName) {
-        ui.lblResultado.text = cor(AMARELO, "Escolha a câmera nas Configurações do Candle, seção Camera.");
+    c.cameraName = nome;
+    if (!configurada && nome) {
+        var rs = c.availableResolutions || [];
+        for (var i = 0; i < rs.length; i++) {
+            if (String(rs[i]) === RESOLUCAO_PADRAO) c.resolution = par(RESOLUCAO_PADRAO.replace("x", ","), parseInt);
+        }
     }
+    if (!nome) {
+        var l = c.availableCameras || [];
+        avisoCamera = l.length ? "Mais de uma câmera ligada: escolha qual nas Configurações do Candle, seção Camera ("
+                                 + l.join(", ") + ")."
+                               : "Nenhuma câmera encontrada. O endoscópio tem que estar ligado direto no PC, não no hub.";
+    } else {
+        avisoCamera = "";
+    }
+    atualizar();
 }
 
 // ---------- configuracoes (deslocamento da camera) ----------
