@@ -345,3 +345,22 @@ def test_preflight_do_arquivo_1_inclui_os_furos(tmp_path):
     assert all(contorno.buffer(1e-3).contains(Point(f)) for f in res.furos)
     assert (-13.0, 0.0) in res.contorno_cima and (13.0, 0.0) in res.contorno_cima
     assert 'furos cabem' not in open(res.arquivos[2]).read()
+
+
+def test_alivio_termico_dos_pads_do_plano_e_fresado(tmp_path):
+    """O vao do alivio termico em volta dos pads de GND fica entre o plano e o proprio pad (mesma
+    rede), mas tem que ser fresado, senao o pad gruda no plano e fica dificil de soldar."""
+    from shapely import affinity
+    from shapely.ops import unary_union
+    from fresa import caminhos as c
+    d = os.path.join(AQUI, 'dados', 'blink-plano-areas-kicad')
+    p = placa.carregar(d, 'blink blink-roteado-')
+    r = validacao.validar(p)
+    res = exportar.gerar(p, r, str(tmp_path), previa=False)
+    cu = c.cobre(p.B, True)
+    sulcos = unary_union([LineString(q).buffer(c.MEIO_SULCO, 8) for q in res.caminhos_baixo if len(q) > 1])
+    pads = [e for e in p.B if e.rede == 'GND' and e.funcao == 'ComponentPad']
+    assert len(pads) == 3
+    for e in pads:
+        vao = affinity.scale(e.geom, -1, 1, origin=(0, 0)).buffer(0.5).difference(cu)
+        assert vao.intersection(sulcos).area / vao.area > 0.95, e.ref

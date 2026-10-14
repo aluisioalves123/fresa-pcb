@@ -26,6 +26,10 @@ AREA_MIN_BORDA = 5.0     # mm2 de plano nessa faixa para ele ser o "dono da bord
 # da passada). Tirar esse corte nunca cria curto: a outra rede mantem o anel dela inteiro.
 # Ele so garante isolacao dupla na folga plano/rede (ate ~0,85 mm na 1a passada).
 SEPARA = 0.5
+# Alivio termico: o vao em volta de um pad do proprio plano (0,5 mm no KiCad) nao separa redes,
+# mas tem que ser fresado, senao o pad fica grudado no plano e e dificil de soldar. Do lado do
+# plano, o corte a menos disso de um pad dele nunca e descartado.
+ALIVIO = 1.0
 
 
 def cobre(elementos, espelhar=False):
@@ -56,13 +60,15 @@ def dono_da_borda(elementos, contorno, espelhar=False, proibidas=None):
         return None
     dono = unary_union([e.geom for e in elementos if e.rede == rede])
     outros = unary_union([e.geom for e in elementos if e.rede != rede])
+    pads = unary_union([e.geom for e in elementos if e.rede == rede and e.pos is not None])
     # a beira do sulco, nao o centro, e que nao pode entrar: meio sulco de folga
     proibido = unary_union(proibidas).buffer(MEIO_SULCO, SEG_ISO) if proibidas else None
     if espelhar:
         dono = affinity.scale(dono, -1, 1, origin=(0, 0))
         outros = affinity.scale(outros, -1, 1, origin=(0, 0))
+        pads = affinity.scale(pads, -1, 1, origin=(0, 0))
         proibido = proibido and affinity.scale(proibido, -1, 1, origin=(0, 0))
-    return dict(rede=rede, dono=dono, outros=outros, proibidas=proibido)
+    return dict(rede=rede, dono=dono, outros=outros, pads=pads, proibidas=proibido)
 
 
 def descarte(borda, d):
@@ -72,6 +78,8 @@ def descarte(borda, d):
         return None
     lado_dono = borda['dono'].buffer(d + 0.01, SEG_ISO)
     fora = lado_dono.difference(borda['outros'].buffer(d + SEPARA, SEG_ISO))
+    if borda.get('pads') is not None and not borda['pads'].is_empty:
+        fora = fora.difference(borda['pads'].buffer(ALIVIO, SEG_ISO))     # alivio termico fica
     if borda.get('proibidas') is not None:
         # na area proibida so fica a isolacao obrigatoria, a das outras redes
         fora = fora.union(lado_dono.difference(borda['outros'].buffer(d + 0.01, SEG_ISO))
