@@ -40,7 +40,7 @@ O botão **Exportar para a fresa**:
 
 ## Plugin do Candle
 
-Painel **Fresa PCB** na janela Usuário do Candle (QtScript, `candle_plugin/fresa/`). A câmera continua na janela **Camera** oficial: você mira por ela e o painel lê a posição da máquina, faz a conta e troca o programa carregado pelo corrigido.
+Faz uma coisa só: com o desenho aberto no Candle, você marca os dois fiduciais pela câmera e ele corrige o desenho. Não move a máquina. É o painel **Fresa PCB** na janela Usuário (`candle_plugin/fresa/`).
 
 Instalar ou atualizar (o Windows pede permissão de administrador, porque a pasta de plugins fica em Arquivos de Programas):
 
@@ -50,23 +50,18 @@ python instalar_plugin_candle.py
 
 Depois feche e abra o Candle.
 
-**Calibrar a câmera** (sempre que mexer no suporte): **Olhar a cruz 0,0** sobe ao topo (`G53 G0 Z-2`) e leva a câmera até a cruz gravada na mesa; ajuste só X e Y com o jog até a cruz ficar no centro da mira e clique **Calibrar aqui**. Valor atual: X 35,065, Y -6,000.
+Uso, na fase 3:
 
-**Virar a placa (fase 3):**
+1. abra o `3-cobre-baixo.nc` (o painel lê os fiduciais do cabeçalho e avisa que precisa de correção);
+2. com o jog, leve a câmera até o fiducial da esquerda, centralize na mira (janela **Camera** oficial) e clique **Marcar fiducial 1**; repita no da direita com **Marcar fiducial 2**;
+3. o painel mostra a distância de projeto e a medida, o giro e o deslocamento; se a distância errar mais de 0,1 mm, pede para marcar de novo;
+4. **Corrigir o desenho** grava `3-cobre-baixo-CORRIGIDO.nc` ao lado do original e abre ele no lugar (sem a trava do começo, com os voos girados e passando pelo centro real).
 
-1. carregue o `3-cobre-baixo.nc`; o painel lê os fiduciais do cabeçalho e avisa que precisa de correção;
-2. vire a placa como página de livro, da esquerda para a direita, e prenda;
-3. **Ir** no fiducial 1 leva a câmera aonde ele deveria estar; ajuste com o jog até o furo ficar no centro da mira e **Marcar**;
-4. **Ir** no fiducial 2 já mira corrigido pelo erro do primeiro; ajuste e **Marcar**;
-5. o painel mostra a distância de projeto e a medida; se diferirem mais de 0,1 mm, pede para mirar de novo;
-6. **Aplicar correção** grava `3-cobre-baixo-CORRIGIDO.nc` ao lado do original e carrega no Candle (sem a trava, com os voos girados e passando pelo centro real);
-7. **Broca no centro** leva a broca ao centro real da placa para o probe do Z.
+Serve também para uma placa que saiu do lugar sem virar: abra o arquivo da fase em que parou e marque os fiduciais.
 
-Os campos de posição aceitam qualquer par de furos: o mesmo método recoloca uma placa que saiu do lugar sem virar, usando 2 furos que já existem, o mais afastados possível.
+O deslocamento câmera → broca (posição da máquina com a cruz 0,0 da mesa no centro da mira, máquina no topo) fica nas **Configurações do Candle**, na seção Fresa PCB. Valor atual: X 35,065, Y -6,000.
 
-O plugin só move a máquina parada e pronta (Idle) e sem programa rodando. Toda ida sobe antes ao topo da máquina.
-
-Testes sem o Candle: `candle_plugin/testes/simulador.js` imita o Candle em Node e os testes em `testes/test_candle_nucleo.py` rodam a virada completa da v5 nele, conferindo que o arquivo corrigido é idêntico ao do núcleo em Python.
+Testes sem o Candle: `candle_plugin/testes/simulador.js` imita o Candle em Node (inclusive a regra do QtScript de só enxergar os filhos diretos de cada widget) e os testes em `testes/test_candle_nucleo.py` rodam a correção da v5 nele, conferindo que o arquivo corrigido é idêntico ao do núcleo em Python.
 
 ## Linha de comando
 

@@ -82,67 +82,80 @@ def arq3_copia(arquivo3, tmp_path):
     return str(c)
 
 
-def test_virada_completa_no_simulador(arq3_copia, tmp_path):
+def esperado_python(arquivo, m1, m2):
+    f, info = corrigir.transformacao([(-13.0, 0.0), (13.0, 0.0)], [corrigir.visto_pela_camera(m) for m in (m1, m2)])
+    py = corrigir.aplicar(open(arquivo).read(), f, f"CORRIGIDO pelos fiduciais: giro {info['giro_graus']:.2f} graus, "
+                                                  f"centro da placa em X{info['centro'][0]:.2f} Y{info['centro'][1]:.2f}")
+    return py if py.endswith('\n') else py + '\n'
+
+
+def test_marcar_e_corrigir_o_desenho_aberto(arq3_copia, tmp_path):
     s = simular(arq3_copia, [
-        {'foto': 'inicio'},
-        {'clicar': 'cmdIr1'},
+        {'foto': 'aberto'},
         {'pos': M1}, {'clicar': 'cmdMarcar1'},
-        {'clicar': 'cmdIr2'},
         {'pos': M2}, {'clicar': 'cmdMarcar2'},
-        {'foto': 'medido'},
-        {'clicar': 'cmdAplicar'},
-        {'foto': 'aplicado'},
-        {'clicar': 'cmdCentro'},
+        {'foto': 'marcado'},
+        {'clicar': 'cmdCorrigir'},
+        {'foto': 'corrigido'},
     ], tmp_path)
-    ini, med, apl = s['fotos']
-    assert ini['txtF1']['text'] == '-13.000, 0.000' and ini['txtF2']['text'] == '13.000, 0.000'
-    assert 'Precisa da correção' in ini['lblArquivo']['text'] and not ini['cmdAplicar']['enabled']
-    c = s['log']['comandos']
-    # Ir 1: camera sobre o fiducial de projeto; Ir 2: ja corrigido pelo erro medido no 1
-    assert c[0] == ['G53 G0 Z-2', 'G90 G0 X22.065 Y-6.000']
-    assert c[1] == ['G53 G0 Z-2', 'G90 G0 X46.902 Y-11.200']
-    assert 'giro' in med['lblResultado']['text'].lower() and med['cmdAplicar']['enabled']
-    # o arquivo corrigido gravado ao lado e carregado e igual ao do Python
+    ab, mc, co = s['fotos']
+    assert 'Precisa da correção' in ab['lblArquivo']['text']
+    assert ab['cmdMarcar1']['enabled'] and not ab['cmdCorrigir']['enabled']
+    assert mc['cmdMarcar1']['text'].endswith('✓') and mc['cmdMarcar2']['text'].endswith('✓')
+    assert 'Giro 1.10' in mc['lblResultado']['text'] and mc['cmdCorrigir']['enabled']
+    # o desenho aberto e trocado pelo corrigido, gravado ao lado, igual ao do Python
     corrigido = arq3_copia[:-3] + '-CORRIGIDO.nc'
     assert s['log']['carregados'] == [corrigido] and s['programa'] == corrigido
-    f, info = corrigir.transformacao([(-13.0, 0.0), (13.0, 0.0)], [corrigir.visto_pela_camera(m) for m in (M1, M2)])
-    texto = open(arq3_copia).read()
-    py = corrigir.aplicar(texto, f, f"CORRIGIDO pelos fiduciais: giro {info['giro_graus']:.2f} graus, centro da placa "
-                                    f"em X{info['centro'][0]:.2f} Y{info['centro'][1]:.2f}")
-    assert open(corrigido).read() == py + ('' if py.endswith('\n') else '\n')
-    assert 'Já corrigido' in apl['lblArquivo']['text'] and not apl['cmdAplicar']['enabled']
-    # broca no centro real (o que o exemplo-4 diz: X-1.16 Y-4.95)
-    assert c[2][0] == 'G53 G0 Z-2' and c[2][1].startswith('G90 G0 X-1.165 Y-4.950')
-    assert s['log']['avisos'] == []
+    assert open(corrigido).read() == esperado_python(arq3_copia, M1, M2)
+    assert 'Já corrigido' in co['lblArquivo']['text'] and not co['cmdCorrigir']['enabled']
+    assert 'centro da placa em X -1.165 Y -4.950' in co['lblResultado']['text']
+    assert s['log']['avisos'] == []          # e nunca moveu a maquina
 
 
-def test_medida_ruim_nao_deixa_aplicar(arq3_copia, tmp_path):
+def test_medida_ruim_nao_deixa_corrigir(arq3_copia, tmp_path):
     s = simular(arq3_copia, [
         {'pos': M1}, {'clicar': 'cmdMarcar1'},
         {'pos': (M2[0] + 0.3, M2[1])}, {'clicar': 'cmdMarcar2'},
-        {'foto': 'ruim'}, {'clicar': 'cmdAplicar'},
+        {'foto': 'ruim'}, {'clicar': 'cmdCorrigir'},
     ], tmp_path)
     f = s['fotos'][0]
-    assert not f['cmdAplicar']['enabled'] and 'mire os dois fiduciais de novo' in f['lblDica']['text']
+    assert not f['cmdCorrigir']['enabled'] and 'marque os dois de novo' in f['lblResultado']['text']
     assert s['log']['carregados'] == []
 
 
-def test_maquina_em_alarme_ou_rodando_nao_move(arq3_copia, tmp_path):
-    s = simular(arq3_copia, [{'estado': 2}, {'clicar': 'cmdIr1'}, {'clicar': 'cmdMarcar1'},
-                             {'estado': 1, 'remetente': 0}, {'clicar': 'cmdIr1'}], tmp_path)
-    assert s['log']['comandos'] == []
-    assert len(s['log']['avisos']) == 3
+def test_so_marca_com_a_maquina_parada_e_nao_corrige_rodando(arq3_copia, tmp_path):
+    s = simular(arq3_copia, [{'estado': 13}, {'pos': M1}, {'clicar': 'cmdMarcar1'}, {'foto': 'andando'},
+                             {'estado': 1}, {'clicar': 'cmdMarcar1'}, {'pos': M2}, {'clicar': 'cmdMarcar2'},
+                             {'remetente': 0}, {'clicar': 'cmdCorrigir'}], tmp_path)
+    assert not s['fotos'][0]['cmdMarcar1']['text'].endswith('✓')
+    assert s['log']['carregados'] == []
+    assert len(s['log']['avisos']) == 2 and not any('MOVEU' in a for a in s['log']['avisos'])
 
 
-def test_calibrar(arq3_copia, tmp_path):
+def test_abrir_outro_arquivo_zera_as_marcas(arq3_copia, arquivo3, tmp_path):
+    outro = tmp_path / 'outro.nc'
+    shutil.copy(arquivo3, outro)
+    s = simular(arq3_copia, [{'pos': M1}, {'clicar': 'cmdMarcar1'}, {'abrir': str(outro)}, {'tick': 1}, {'foto': 'f'}],
+                tmp_path)
+    assert not s['fotos'][0]['cmdMarcar1']['text'].endswith('✓')
+
+
+def test_deslocamento_da_camera_nas_configuracoes(arq3_copia, tmp_path):
+    # outro deslocamento: as mesmas posicoes de maquina dao outra correcao
     s = simular(arq3_copia, [
-        {'clicar': 'cmdOlharCruz'},
-        {'pos': (35.1, -6.05)}, {'responder': 'nao'}, {'clicar': 'cmdCalibrar'}, {'foto': 'recusou'},
-        {'responder': 'sim'}, {'clicar': 'cmdCalibrar'}, {'foto': 'aceitou'},
-        {'clicar': 'cmdOlharCruz'},
+        {'foto': 'padrao'},
+        {'config': ['35,1', -6.05]},
+        {'pos': M1}, {'clicar': 'cmdMarcar1'}, {'pos': M2}, {'clicar': 'cmdMarcar2'},
+        {'clicar': 'cmdCorrigir'}, {'foto': 'f'},
     ], tmp_path)
-    assert s['log']['comandos'][0] == ['G53 G0 Z-2', 'G90 G0 X35.065 Y-6.000']
-    assert 'X 35.065' in s['fotos'][0]['lblCamera']['text']
+    assert s['fotos'][0]['txtCamX']['text'] == '35.065' and s['fotos'][0]['txtCamY']['text'] == '-6.000'
     assert s['armazenamento'] == {'FresaPCB/camX': 35.1, 'FresaPCB/camY': -6.05}
-    assert 'X 35.100' in s['fotos'][1]['lblCamera']['text']
-    assert s['log']['comandos'][1] == ['G53 G0 Z-2', 'G90 G0 X35.100 Y-6.050']
+    assert 'centro da placa em X -1.200 Y -4.900' in s['fotos'][1]['lblResultado']['text']
+
+
+def test_arquivo_sem_cabecalho_nao_deixa_marcar(tmp_path):
+    a = tmp_path / 'qualquer.nc'
+    a.write_text('G21 G90\nG0 X1.000 Y2.000\nM30\n')
+    s = simular(str(a), [{'foto': 'f'}], tmp_path)
+    f = s['fotos'][0]
+    assert 'Sem cabeçalho FRESA' in f['lblArquivo']['text'] and not f['cmdMarcar1']['enabled']

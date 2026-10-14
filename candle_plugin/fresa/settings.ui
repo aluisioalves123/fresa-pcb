@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>frmFresaSettings</class>
+ <widget class="QWidget" name="frmFresaSettings">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>360</width><height>90</height></rect>
+  </property>
+  <layout class="QFormLayout" name="layForm">
+   <item row="0" column="0" colspan="2">
+    <widget class="QLabel" name="lblExplica">
+     <property name="wordWrap"><bool>true</bool></property>
+     <property name="text"><string>Posição da máquina (X, Y) com a cruz 0,0 da mesa no centro da mira da câmera, com a máquina no topo (G53 Z-2).</string></property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QLabel" name="lblCamX">
+     <property name="text"><string>Câmera X</string></property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QLineEdit" name="txtCamX"/>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="lblCamY">
+     <property name="text"><string>Câmera Y</string></property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QLineEdit" name="txtCamY"/>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
