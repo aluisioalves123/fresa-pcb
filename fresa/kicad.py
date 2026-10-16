@@ -102,6 +102,33 @@ def areas_proibidas(pcb):
     return out
 
 
+VIA_PREFIXO = 'VIAT'   # via termica do Roteador CNC: footprint de 1 pad, fio soldado dos dois lados
+
+
+def lados_de_solda(pcb):
+    """Lado da solda de cada peca do .kicad_pcb: {ref: 'baixo' | 'cima' | 'ambos'}.
+
+    Peca normal (corpo em cima) e soldada embaixo; peca virada no KiCad (corpo
+    no B.Cu) e soldada em cima - o Roteador CNC vira peca para a placa fechar
+    menor. A via termica dele (VIAT1, VIAT2...) e via: solda dos dois lados."""
+    texto = open(pcb, encoding='utf-8').read()
+    out = {}
+    for fp in _blocos(texto, 'footprint '):
+        ref = re.search(r'\(property\s+"Reference"\s+"([^"]*)"', fp) \
+            or re.search(r'\(fp_text\s+reference\s+"?([^"\s)]*)', fp)
+        cam = re.search(r'\(layer\s+"([^"]*)"', fp)
+        if not ref or not cam:
+            continue
+        r = ref.group(1)
+        if re.match(VIA_PREFIXO + r'\d+$', r):
+            out[r] = 'ambos'
+        elif cam.group(1) == 'B.Cu':
+            out[r] = 'cima'
+        else:
+            out[r] = 'baixo'
+    return out
+
+
 def processar(pcb, cli=None, pasta_saida=None, pasta_fab=None):
     """Exporta, carrega e valida. Devolve (placa, relatorio, pasta_gcode)."""
     pcb = os.path.abspath(pcb)
@@ -113,6 +140,8 @@ def processar(pcb, cli=None, pasta_saida=None, pasta_fab=None):
     prefixo = exportar_fabricacao(pcb, pasta_fab, cli)
     with open(os.path.join(pasta_fab, prefixo + placa_mod.ARQ_PROIBIDAS), 'w', encoding='utf-8') as f:
         json.dump(areas_proibidas(pcb), f)
+    with open(os.path.join(pasta_fab, prefixo + placa_mod.ARQ_LADOS), 'w', encoding='utf-8') as f:
+        json.dump(lados_de_solda(pcb), f)
     p = placa_mod.carregar(pasta_fab, prefixo)
     rel = validacao.validar(p)
     for item in ligacoes_nao_roteadas(pcb, pasta_fab, cli):

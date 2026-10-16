@@ -65,7 +65,7 @@ Brocas de PCB têm um anel plástico que define o comprimento, e uma broca longa
 - Cobre a pelo menos **1 mm** da borda.
 - Cantos: triângulos de 11 mm sem cobre (garras).
 - **Furos: todos 0,8 mm.**
-- **Solda só do lado de baixo:** trilhas do lado de cima nunca encostam em pad de componente THT. Do lado de cima só existem ligações via a via. (Vias são fio soldado dos dois lados, pois não há furo metalizado.)
+- **Solda de um lado só por peça:** peça normal é soldada embaixo, e trilha de cima nunca encosta no pad dela. Peça virada no KiCad (corpo no B.Cu, como o Roteador CNC faz para fechar a placa menor) é soldada em cima, e é a trilha de baixo que não pode encostar. (Vias, inclusive a via térmica `VIAT` do Roteador CNC, são fio soldado dos dois lados, pois não há furo metalizado.)
 - **Fiduciais:** footprint `Fiducial_Furo_0.8` (biblioteca `fresa-rino`, já criado pelo usuário): furo NPTH de 0,8 com pad = furo e uma área de regra de 2×2 mm sem nada em F.Cu e B.Cu. Dois deles, **no meio da borda esquerda e no meio da borda direita, na mesma altura Y, a ~2 mm da borda** (na placa 30×30: X ±13, Y 0).
 - **Origem** = centro do contorno da placa. Tudo é gerado com o (0,0) no centro.
 
@@ -89,7 +89,7 @@ Já implementadas no `check.py`, generalizar:
 - **Conectividade:** cada rede tem que formar uma única ilha de cobre, juntando cima + baixo pelos furos. Rede partida = erro.
 - **Curto:** número de ilhas = número de redes. Duas redes que se tocam = erro.
 - **Vão entre redes** menor que 0,40 mm = aviso (a fresa pode não separar). Na v5 existiam vãos de 0,40 a 0,45 e funcionou.
-- **Trilha de cima encostando em pad de componente** = erro (quebra a regra de solda só embaixo).
+- **Trilha encostando em pad de componente do lado sem solda** = erro (quebra a regra de solda de um lado só).
 - **Furo diferente de 0,8** = aviso listando os furos.
 - **Fiduciais:** exatamente 2, na mesma altura Y, um de cada lado. Senão, erro (sem eles a fase 3 não existe).
 - **Cobre dentro dos triângulos das garras** = erro.

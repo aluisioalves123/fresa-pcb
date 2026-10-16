@@ -108,16 +108,25 @@ def validar(placa):
                  '"Usar formato X2" e "Incluir atributos de netlist" ligados')
         return rel
 
-    # trilha de cima encostando em pad de componente (regra: solda so embaixo)
-    pads_cima = [e for e in placa.F if e.funcao == 'ComponentPad']
-    outros_cima = [e for e in placa.F if e.funcao != 'ComponentPad']
-    for t in outros_cima:
-        for p in pads_cima:
-            if t.geom.intersects(p.geom):
-                o = 'trilha' if t.funcao == 'Conductor' else 'cobre'
-                rel.erro(f'{o} de cima encostando no pino {p.ref or "?"} da rede {t.rede} '
-                         f'em {_onde(t.geom.intersection(p.geom))}: solda e so do lado de baixo, '
-                         f'ligue por baixo ou por uma via')
+    # trilha encostando em pad de componente do lado SEM solda: o furo nao e
+    # metalizado, o anel desse lado nao liga em nada. Peca normal e soldada
+    # embaixo; virada no KiCad, em cima; via termica (VIAT), dos dois lados
+    lado_solda = placa.lado_da_solda if hasattr(placa, 'lado_da_solda') else (lambda r: 'baixo')
+    oposto = {'cima': 'baixo', 'baixo': 'cima'}
+
+    def sem_solda(e, lado):
+        return e.funcao == 'ComponentPad' and lado_solda(e.ref) == oposto[lado]
+
+    for lado, L in camadas.items():
+        pads = [e for e in L if sem_solda(e, lado)]
+        outros = [e for e in L if e.funcao != 'ComponentPad']
+        for t in outros:
+            for p in pads:
+                if t.geom.intersects(p.geom):
+                    o = 'trilha' if t.funcao == 'Conductor' else 'cobre'
+                    rel.erro(f'{o} de {lado} encostando no pino {p.ref or "?"} da rede {t.rede} '
+                             f'em {_onde(t.geom.intersection(p.geom))}: a solda dessa peca e so '
+                             f'do lado de {oposto[lado]}, ligue por {oposto[lado]} ou por uma via')
 
     # ilhas, curtos e conectividade
     ilhas = {}
@@ -129,11 +138,15 @@ def validar(placa):
             if len(redes) > 1:
                 rel.erro(f'curto no cobre de {lado} entre as redes {", ".join(sorted(redes))} '
                          f'perto de {_onde(g)}')
-            so_pad = all(e.funcao == 'ComponentPad' for e in es)
-            ilhas[lado].append((g, redes, so_pad and lado == 'cima'))
+            # anel de pad sozinho do lado sem solda nao e pedaco da rede
+            so_anel = all(sem_solda(e, lado) for e in es)
+            ilhas[lado].append((g, redes, so_anel))
 
     vias = [(e.pos, e.rede) for e in placa.F + placa.B if e.funcao == 'ViaPad' and e.pos]
     vias += [((f.x, f.y), None) for f in placa.furos if f.funcao == 'via']
+    # pad soldado dos dois lados (via termica) liga cima e baixo como via
+    vias += [(e.pos, e.rede) for e in placa.F
+             if e.funcao == 'ComponentPad' and e.pos and lado_solda(e.ref) == 'ambos']
     pai = {}
 
     def ach(k):

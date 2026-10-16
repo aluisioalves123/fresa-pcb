@@ -14,6 +14,7 @@ CANTO = 11.0          # perna do triangulo proibido em cada canto (mm)
 FIDUCIAL_LADO = 2.0   # area proibida padrao em volta de cada fiducial (mm), se o KiCad nao disser outra
 FIDUCIAL_DIAM = 0.85  # furos NPTH ate este diametro sao tratados como fiducial
 ARQ_PROIBIDAS = 'areas-proibidas.json'   # gravado pela ponte do KiCad ao lado dos Gerbers
+ARQ_LADOS = 'lados-de-solda.json'         # idem: ref -> 'baixo', 'cima' ou 'ambos'
 SUFIXOS = {
     'F': 'F_Cu.gbr',
     'B': 'B_Cu.gbr',
@@ -39,6 +40,12 @@ class Placa:
     info_origem: str | None = None
     proibidas_extra: list = field(default_factory=list)   # areas proibidas do projeto (alem dos cantos)
     origem_proibidas: str = ''
+    # lado da solda de cada peca, pela referencia. Sem o arquivo da ponte do
+    # KiCad, toda peca e soldada embaixo (a regra da especificacao)
+    lados: dict = field(default_factory=dict)
+
+    def lado_da_solda(self, ref):
+        return self.lados.get(ref, 'baixo')
 
     @property
     def limites(self):
@@ -178,4 +185,7 @@ def carregar(pasta, prefixo=None):
                                  f.x + FIDUCIAL_LADO / 2, f.y + FIDUCIAL_LADO / 2)
                              for f in furos if f.funcao == 'npth' and f.diametro <= FIDUCIAL_DIAM]
         p.origem_proibidas = 'padrao'
+    arq_lados = os.path.join(pasta, prefixo + ARQ_LADOS)
+    if os.path.exists(arq_lados):
+        p.lados = json.load(open(arq_lados, encoding='utf-8'))
     return p

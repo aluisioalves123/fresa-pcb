@@ -101,7 +101,7 @@ Exportação esperada do KiCad (o plugin já faz assim): Gerber **X2 com atribut
 
 Antes de gerar qualquer arquivo:
 
-- **erro:** rede partida ou ligação não roteada, curto entre redes, trilha de cima encostando em pino de componente (a solda é só embaixo), fiduciais faltando ou desalinhados, cobre que precisa de isolação dentro de uma área proibida, Gerber sem atributos de rede;
+- **erro:** rede partida ou ligação não roteada, curto entre redes, trilha encostando em pino de componente do lado sem solda (peça normal é soldada embaixo; peça virada no KiCad, em cima; via térmica `VIAT` do Roteador CNC, dos dois lados), fiduciais faltando ou desalinhados, cobre que precisa de isolação dentro de uma área proibida, Gerber sem atributos de rede;
 - **aviso:** vão entre redes menor que 0,40 mm, furo diferente de 0,8, primeira passada entrando numa área proibida, cobre a menos de 1 mm da borda (menos o plano dono da borda).
 
 ## Prova com a blink v5
@@ -137,7 +137,8 @@ Os desvios de milésimos vêm da versão do shapely/GEOS (o `simplify(0.005)` es
 - **Origem:** se os Gerbers não vierem com a origem no centro, o núcleo desloca tudo e informa.
 - **Conectividade sem furo metalizado:** pino de componente liga só embaixo; só a via liga cima e baixo. Ilha de cima que é só pad de componente é ignorada.
 - **Furos:** todos com a broca 0,8, ordem por vizinho mais próximo a partir do centro.
-- Macros de abertura (pads retangulares arredondados) não são suportadas: a regra do projeto é pad redondo ou oval, e o erro diz isso.
+- Macros de abertura: lê as do KiCad (HorizOval, RotRect, RoundRect, que aparecem em pad oval ou retangular girado fora de 0/90 graus e em pad arredondado), com as primitivas 1, 4, 5, 20 e 21. Primitiva de outro tipo e variável de macro (`$4=...`) dão erro.
+- O lado da solda de cada peça vem do `.kicad_pcb` (comando `kicad` e plugin, arquivo `lados-de-solda.json` ao lado dos Gerbers). Pelo comando `gerar`, sem esse arquivo, toda peça é soldada embaixo.
 
 ## Estrutura
 
