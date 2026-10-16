@@ -5,6 +5,7 @@ decimais (G0 X0.000 Y0.000 inclusive). So o G0 X0 Y0 final, sem casas, nao e
 coordenada de placa e nao deve ser corrigido.
 """
 import math
+import textwrap
 import unicodedata
 
 from . import caminhos as cam
@@ -31,6 +32,19 @@ def comentario(texto):
     return f'( {t} )'
 
 
+# O Candle so manda uma linha que caiba inteira no buffer de 127 bytes dele: linha
+# maior nunca cabe, e ele fica parado com a maquina em Idle e tudo "In queue", sem
+# erro nenhum (o voo 1 do interfone 85x52 tinha 133). 80 e o limite do GRBL tambem.
+LINHA_MAX = 80
+LINHA_CANDLE = 120   # nem o cabecalho FRESA de uma linha so pode passar disto
+
+
+def comentarios(texto):
+    """Comentario de informacao, quebrado em linhas de ate LINHA_MAX caracteres."""
+    t = comentario(texto)[2:-2]
+    return [f'( {x} )' for x in textwrap.wrap(t, LINHA_MAX - 4)] or ['(  )']
+
+
 def cabecalho_maquina(fase, lado, ferramenta, placa, fiduciais, extra=''):
     fid = ';'.join(f'{f3(x)},{f3(y)}' for x, y in fiduciais)
     return [
@@ -47,22 +61,22 @@ def voos(P, furos=()):
     pontos = list(P) + [[tuple(f)] for f in furos]
     x0, x1, y0, y1 = cam.extremos(pontos)
     o_que = 'o desenho e os furos cabem' if furos else 'o desenho cabe'
-    G = [comentario('VOO 1 em cruz pelo centro da placa, fresa DESLIGADA, Z2: '
+    G = [*comentarios('VOO 1 em cruz pelo centro da placa, fresa DESLIGADA, Z2: '
                     f'para 2 s em cada extremo, confira se {o_que} na placa'),
-         comentario(f'extremos do corte{" e dos furos" if furos else ""}: '
+         *comentarios(f'extremos do corte{" e dos furos" if furos else ""}: '
                     f'X {x0:.1f} a {x1:.1f} | Y {y0:.1f} a {y1:.1f}')]
     if furos:
-        G.append(comentario('os fiduciais ficam na linha do centro: as paradas em X sao em cima deles'))
+        G.extend(comentarios('os fiduciais ficam na linha do centro: as paradas em X sao em cima deles'))
     for a, b in [((x0, 0), (x1, 0)), ((0, y0), (0, y1))]:
         G += [f'G0 X{f3(a[0])} Y{f3(a[1])}', f'G0 Z{Z_VOO1}', 'G4 P2',
               f'G1 X{f3(b[0])} Y{f3(b[1])} F{F_VOO}', 'G4 P2', f'G0 Z{Z_VOO1_ENTRE}']
     H = cam.contorno_voo(pontos)
-    G += [comentario(f'VOO 2 no contorno de tudo o que vai ser cortado{" e furado" if furos else ""}, '
+    G += [*comentarios(f'VOO 2 no contorno de tudo o que vai ser cortado{" e furado" if furos else ""}, '
                      'fresa DESLIGADA, Z0.5: confira se a ponta passa longe das areas proibidas'),
           f'G0 X{f3(H[0][0])} Y{f3(H[0][1])}', f'G0 Z{Z_VOO2}', 'G4 P2']
     G += [f'G1 X{f3(x)} Y{f3(y)} F{F_VOO}' for x, y in H[1:] + [H[0]]]
     G += ['G4 P2', TOPO, 'G0 X0.000 Y0.000',
-          comentario('PAUSA: voos conferidos? Aperte Pause de novo no Candle para ligar a fresa '
+          *comentarios('PAUSA: voos conferidos? Aperte Pause de novo no Candle para ligar a fresa '
                      'e cortar, ou Stop para cancelar'),
           'M0']
     return G, H, (x0, x1, y0, y1)
@@ -82,15 +96,16 @@ def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None, fu
     extra = '' if fase == 1 else ' espelhado=x corrigir=sim'
     G = cabecalho_maquina(fase, lado, 'vbit30', placa, fiduciais_arquivo, extra)
     if fase == 3:
-        G += [comentario('ATENCAO: arquivo SEM correcao, espelhado em X para a placa virada. '
-                         'Rode so pelo plugin FRESA do Candle, que corrige pelos fiduciais '
-                         'e tira esta parada'),
-              'M0']
-    G += [comentario(titulo),
-          comentario(f'V-bit 30 graus | {cam.PASSES} passadas | profundidade {DEPTH} | sem heightmap'),
-          comentario('zero XY: G54 apos homing | zero Z: probe no cobre, uma vez so, no centro da placa')]
+        # a trava e UMA linha so seguida do M0: o corretor tira as duas juntas
+        G += [comentario('ATENCAO: arquivo SEM correcao. Rode so pelo plugin FRESA do Candle'),
+              'M0',
+              *comentarios('espelhado em X para a placa virada; o plugin FRESA corrige pelos '
+                           'fiduciais e tira a parada de cima')]
+    G += [*comentarios(titulo),
+          *comentarios(f'V-bit 30 graus | {cam.PASSES} passadas | profundidade {DEPTH} | sem heightmap'),
+          *comentarios('zero XY: G54 apos homing | zero Z: probe no cobre, uma vez so, no centro da placa')]
     if rede_borda:
-        G.append(comentario(f'borda: o plano {rede_borda} vai ate a beira e nao e isolado dela, '
+        G.extend(comentarios(f'borda: o plano {rede_borda} vai ate a beira e nao e isolado dela, '
                             f'todas as outras redes tem isolacao completa'))
     G += INICIO
     gv, H, cruz = voos(P, furos)
@@ -100,10 +115,10 @@ def arquivo_cobre(placa, P, fase, fiduciais_arquivo, titulo, rede_borda=None, fu
 
 def arquivo_furos(placa, furos, fiduciais_arquivo, titulo):
     G = cabecalho_maquina(2, 'cima', f'broca{BROCA}', placa, fiduciais_arquivo)
-    G += [comentario(titulo),
-          comentario(f'broca {BROCA} em todos os furos, inclusive os 2 fiduciais | '
+    G += [*comentarios(titulo),
+          *comentarios(f'broca {BROCA} em todos os furos, inclusive os 2 fiduciais | '
                      f'desce {FURO_PASSO} mm por vez ate -{FURO_FUNDO}'),
-          comentario('zero XY: G54 apos homing | zero Z: probe no cobre com a broca')]
+          *comentarios('zero XY: G54 apos homing | zero Z: probe no cobre com a broca')]
     G += INICIO + SPIN
     for x, y in furos:
         G += [f'G0 X{f3(x)} Y{f3(y)}', f'G0 Z{FURO_ALIVIO}']
@@ -117,8 +132,11 @@ def arquivo_furos(placa, furos, fiduciais_arquivo, titulo):
 
 
 def conferir(linhas):
-    """Regras do GRBL: comentario sem parenteses aninhados e so ASCII."""
+    """Regras do GRBL: comentario sem parenteses aninhados e so ASCII. E do Candle:
+    linha que nao cabe no buffer dele trava o envio."""
     for n, l in enumerate(linhas, 1):
+        if len(l) > LINHA_CANDLE:
+            raise ValueError(f'linha {n} com {len(l)} caracteres, o Candle trava: {l}')
         if not l.isascii():
             raise ValueError(f'linha {n} com caractere nao ASCII: {l}')
         prof = 0

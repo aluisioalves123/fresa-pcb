@@ -145,10 +145,18 @@ def test_arquivos_gerados(pasta, tmp_path):
         assert t[t.index('M3 S1000') + 1] == 'G4 P3'
     assert 'M3 S1000' in t2 and not any(l.startswith('( VOO') for l in t2)
     assert sum(1 for l in t2 if re.match(r'^G0 X-?\d+\.\d{3} Y', l)) == 28
+    # linha longa trava o Candle (buffer de 127): so o cabecalho FRESA passa de 80
+    for t in (t1, t2, t3):
+        assert all(len(l) <= 80 for l in t if not l.startswith('( FRESA '))
+        assert all(len(l) <= gcode.LINHA_CANDLE for l in t)
 
 
 def test_comentarios_seguros():
     assert gcode.comentario('Atenção (teste) ok') == '( Atencao [teste] ok )'
+    assert gcode.comentarios('x ' * 60) == ['( ' + 'x ' * 37 + 'x )', '( ' + 'x ' * 21 + 'x )']
+    assert all(len(l) <= 80 for l in gcode.comentarios('palavra ' * 40))
+    with pytest.raises(ValueError):
+        gcode.conferir(['( ' + 'x' * 130 + ' )'])
     with pytest.raises(ValueError):
         gcode.conferir(['( a ( b ) )'])
     with pytest.raises(ValueError):
